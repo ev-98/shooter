@@ -22,6 +22,7 @@ import pygame
 
 from client import NetworkClient
 from game import Mode, Session, Settings, State
+from sounds import SoundManager
 from ui import (
     make_fonts,
     render_draw,
@@ -508,6 +509,7 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
 
 def main_v2():
     """Full main loop with mode-select integrated cleanly."""
+    pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.init()
     surf  = pygame.display.set_mode((W, H))
     pygame.display.set_caption(TITLE)
@@ -516,6 +518,7 @@ def main_v2():
 
     sess   = Session()
     net    = NetworkClient()
+    snd    = SoundManager(sess.settings)
     tick   = 0
 
     draw_trigger_ref  = [None]     # mutable reference trick
@@ -533,6 +536,8 @@ def main_v2():
     _in_mode_select = False
     _mode_select_idx = 0
 
+    prev_state = sess.state
+    snd.start_wind()
     running = True
     while running:
         clock.tick(FPS)
@@ -548,9 +553,14 @@ def main_v2():
                 k = event.key
 
                 # Mode select screen takes priority
+                _old_idx = _mode_select_idx
                 if handle_mode_select_key(k, sess, net, join_ip_ref,
                                           draw_trigger_ref, online_phase_ref):
                     op = online_phase_ref[0]
+                    if _mode_select_idx != _old_idx:
+                        snd.play_blip()
+                    elif k == pygame.K_RETURN:
+                        snd.play_confirm()
                     continue
 
                 # Main menu
@@ -558,6 +568,7 @@ def main_v2():
                     if k == pygame.K_RETURN:
                         _in_mode_select = True
                         _mode_select_idx = 0
+                        snd.play_confirm()
 
                 # Online setup
                 elif sess.state == State.ONLINE_SETUP:
@@ -622,6 +633,7 @@ def main_v2():
                 elif sess.state == State.READY and sess.mode != Mode.ONLINE:
                     res = _handle_fire_key(k, sess)
                     if res == "false_start":
+                        snd.play_gunshot()
                         _do_false_start(sess, _key_to_player(k, sess))
 
                 # Draw
@@ -629,10 +641,12 @@ def main_v2():
                     if sess.mode == Mode.ONLINE:
                         if k == pygame.K_SPACE:
                             net.send({"type": "fire"})
+                            snd.play_gunshot()
                     else:
                         res = _handle_fire_key(k, sess)
                         if res == "ok":
                             flash_val = 1.0
+                            snd.play_gunshot()
 
                 # Result
                 elif sess.state == State.RESULT:
@@ -675,15 +689,19 @@ def main_v2():
                     else:
                         if k in (pygame.K_UP, pygame.K_w):
                             settings_selected = (settings_selected - 1) % 5
+                            snd.play_blip()
                         elif k in (pygame.K_DOWN, pygame.K_s):
                             settings_selected = (settings_selected + 1) % 5
+                            snd.play_blip()
                         elif k in (pygame.K_RETURN, pygame.K_SPACE):
+                            snd.play_confirm()
                             if settings_selected < 3:
                                 settings_listening = True
                             elif settings_selected == 3:
                                 sess.settings.sound_on = not sess.settings.sound_on
                             elif settings_selected == 4:
                                 sess.settings.music_on = not sess.settings.music_on
+                                snd.on_music_toggle()
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
                             _in_mode_select = False
@@ -720,6 +738,13 @@ def main_v2():
             op = online_phase_ref[0]
 
         flash_val = max(0.0, flash_val - 0.04)
+
+        if sess.state != prev_state:
+            if sess.state in (State.MENU, State.READY, State.LOBBY):
+                snd.start_wind()
+            elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT):
+                snd.stop_wind()
+            prev_state = sess.state
 
         # Render
         p1l, p2l = player_labels(sess)
