@@ -2,6 +2,7 @@
 import array
 import math
 import os
+import wave
 
 import pygame
 
@@ -50,22 +51,56 @@ def _make_confirm() -> pygame.mixer.Sound:
 
 
 def _make_gunshot() -> pygame.mixer.Sound:
-    """Decaying square wave — 8-bit western shot."""
-    dur    = 0.22
-    n      = int(_SR * dur)
-    buf    = array.array('h', [0] * (n * 2))
-    period = 200   # samples → ~220 Hz
+    """Two-component noise-burst gunshot matching the wav file's envelope.
+
+    Crack layer  : raw wideband noise, peaks at ~1ms, gone by ~20ms.
+    Boom layer   : ~400 Hz lowpass-filtered noise, peaks at ~20ms,
+                   decays over ~500ms — replicates the measured ZCR (400-650 Hz)
+                   and the two-hump envelope of the real recording.
+    """
+    import random
+    dur = 0.655
+    n   = int(_SR * dur)
+    buf = array.array('h', [0] * (n * 2))
+    rng = random.Random(42)
+
+    # First-order IIR lowpass, cutoff ~400 Hz, for boom warmth
+    alpha = 1 - math.exp(-2 * math.pi * 400 / _SR)
+    lp = 0.0
+
     for i in range(n):
-        env = (1.0 - i / n) ** 2
-        v   = int(28000 * env * (1 if (i % period) < (period // 2) else -1))
-        buf[i * 2] = buf[i * 2 + 1] = v
+        t = i / _SR
+
+        # Crack: instantaneous-onset noise, half-life ~8ms
+        crack_env = math.exp(-t * 120) * min(t / 0.001, 1.0)
+        crack     = rng.uniform(-1, 1) * crack_env
+
+        # Boom: 20ms linear ramp-in, then exponential decay (~93ms half-life)
+        boom_env = min(t / 0.020, 1.0) * math.exp(-t * 7.5)
+        white    = rng.uniform(-1, 1)
+        lp       = alpha * white + (1 - alpha) * lp
+        boom     = lp * boom_env
+
+        v = int(32000 * (0.58 * crack + 0.42 * boom))
+        buf[i * 2] = buf[i * 2 + 1] = max(-32767, min(32767, v))
+
     return pygame.mixer.Sound(buffer=buf)
 
 
-def _load_sfx(base: str, fallback_fn) -> pygame.mixer.Sound:
+def _load_boosted(path: str, gain: float) -> pygame.mixer.Sound:
+    """Load a wav file and apply a gain multiplier in-memory."""
+    with wave.open(path, "rb") as w:
+        raw = w.readframes(w.getnframes())
+    samples = array.array('h', raw)
+    for i in range(len(samples)):
+        samples[i] = max(-32767, min(32767, int(samples[i] * gain)))
+    return pygame.mixer.Sound(buffer=samples)
+
+
+def _load_sfx(base: str, fallback_fn, gain: float = 1.0) -> pygame.mixer.Sound:
     path = _find(base)
     if path:
-        return pygame.mixer.Sound(path)
+        return _load_boosted(path, gain) if gain != 1.0 else pygame.mixer.Sound(path)
     return fallback_fn()
 
 
@@ -79,7 +114,7 @@ class SoundManager:
 
         self.blip    = _load_sfx("blip",    _make_blip)
         self.confirm = _load_sfx("confirm", _make_confirm)
-        self.gunshot = _load_sfx("gunshot", _make_gunshot)
+        self.gunshot = _load_sfx("gunshot", _make_gunshot, gain=1.15)
 
     # ── SFX ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +129,7 @@ class SoundManager:
     def play_gunshot(self):
         if self._s.sound_on:
             self.gunshot.play()
+        self.stop_wind()
 
     # ── Ambient music ─────────────────────────────────────────────────────────
 
