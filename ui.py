@@ -394,8 +394,8 @@ def _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H,
 def _draw_key_hints(surf, fonts, mode, W, H, settings=None):
     from game import Mode
     if mode == Mode.LOCAL:
-        p1_name = pygame.key.name(settings.p1_key).upper() if settings else "A"
-        p2_name = pygame.key.name(settings.p2_key).upper() if settings else "L"
+        p1_name = pygame.key.name(settings.p1_key).upper() if settings else "LEFT SHIFT"
+        p2_name = pygame.key.name(settings.p2_key).upper() if settings else "RIGHT SHIFT"
         pixel_text(surf, f"[{p1_name}]  P1 FIRE          P2 FIRE  [{p2_name}]",
                    fonts["small"], TEXT_DIM, W // 2, H - 30)
     elif mode == Mode.SOLO:

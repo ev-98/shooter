@@ -23,11 +23,11 @@ class State(Enum):
 
 class Settings:
     # pygame key constant integers (no pygame import needed here)
-    # K_SPACE=32, K_a=97, K_l=108
+    # K_SPACE=32, K_LSHIFT=304, K_RSHIFT=303
     def __init__(self):
         self.solo_key: int = 32   # pygame.K_SPACE
-        self.p1_key:   int = 97   # pygame.K_a
-        self.p2_key:   int = 108  # pygame.K_l
+        self.p1_key:   int = 304  # pygame.K_LSHIFT
+        self.p2_key:   int = 303  # pygame.K_RSHIFT
         self.sound_on: bool = True
         self.music_on: bool = True
 
