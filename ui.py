@@ -219,6 +219,7 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
                    fonts["small"], TEXT_DIM, W // 2, H // 3 + 110)
         pixel_text(surf, "Waiting for opponent...", fonts["small"], TEXT_WARM,
                    W // 2, H * 2 // 3)
+        pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
     elif phase in ("join_ip", "join_code"):
         # IP field

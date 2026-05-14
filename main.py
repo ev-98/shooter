@@ -586,6 +586,7 @@ def main_v2():
                             join_code_buf = ""
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
+                            _in_mode_select = True
                     elif op in ("join_ip", "join_code"):
                         if k == pygame.K_TAB:
                             input_focus = "code" if input_focus == "ip" else "ip"
@@ -606,7 +607,6 @@ def main_v2():
                             else:
                                 join_code_buf = join_code_buf[:-1]
                         elif k == pygame.K_ESCAPE:
-                            sess.state = State.MENU
                             online_phase_ref[0] = "choose"
                         else:
                             ch = event.unicode
@@ -616,17 +616,24 @@ def main_v2():
                             elif input_focus == "code" and ch.isalpha():
                                 if len(join_code_buf) < 4:
                                     join_code_buf += ch.upper()
+                    elif op == "host_connecting":
+                        if k == pygame.K_ESCAPE:
+                            net.close()
+                            online_phase_ref[0] = "choose"
                     elif op == "host_wait":
                         if k == pygame.K_ESCAPE:
                             net.close()
-                            sess.state = State.MENU
+                            online_phase_ref[0] = "choose"
+                    elif op in ("join_connecting", "join_wait"):
+                        if k == pygame.K_ESCAPE:
+                            net.close()
                             online_phase_ref[0] = "choose"
 
                 # Lobby
                 elif sess.state == State.LOBBY:
                     if k == pygame.K_ESCAPE:
                         net.close()
-                        sess.state = State.MENU
+                        sess.state = State.ONLINE_SETUP
                         online_phase_ref[0] = "choose"
 
                 # Ready
@@ -661,8 +668,10 @@ def main_v2():
                         if sess.mode == Mode.ONLINE:
                             net.close()
                             online_phase_ref[0] = "choose"
-                        sess.state = State.MENU
-                        _in_mode_select = False
+                            sess.state = State.ONLINE_SETUP
+                        else:
+                            sess.state = State.MENU
+                            _in_mode_select = True
 
                 # Timeout
                 elif sess.state == State.TIMEOUT:
@@ -671,7 +680,7 @@ def main_v2():
                         draw_trigger_ref[0] = reset_draw_timer()
                     elif k == pygame.K_ESCAPE:
                         sess.state = State.MENU
-                        _in_mode_select = False
+                        _in_mode_select = True
 
                 # Settings
                 elif sess.state == State.SETTINGS:
@@ -704,7 +713,7 @@ def main_v2():
                                 snd.on_music_toggle()
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
-                            _in_mode_select = False
+                            _in_mode_select = True
                             settings_listening = False
 
         op = online_phase_ref[0]
