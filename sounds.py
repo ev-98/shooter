@@ -50,6 +50,20 @@ def _make_confirm() -> pygame.mixer.Sound:
     return pygame.mixer.Sound(buffer=buf)
 
 
+def _make_ping() -> pygame.mixer.Sound:
+    """Short snappy ping: sine at 1800 Hz, fast exponential decay (~80ms)."""
+    freq = 1800.0
+    dur  = 0.15
+    n    = int(_SR * dur)
+    buf  = array.array('h', [0] * (n * 2))
+    for i in range(n):
+        t      = i / _SR
+        env    = math.exp(-t * 35.0)
+        sample = int(32767 * 0.6 * env * math.sin(2 * math.pi * freq * t))
+        buf[i * 2] = buf[i * 2 + 1] = max(-32767, min(32767, sample))
+    return pygame.mixer.Sound(buffer=buf)
+
+
 def _make_gunshot() -> pygame.mixer.Sound:
     """Two-component noise-burst gunshot matching the wav file's envelope.
 
@@ -115,6 +129,7 @@ class SoundManager:
         self.blip    = _load_sfx("blip",    _make_blip)
         self.confirm = _load_sfx("confirm", _make_confirm)
         self.gunshot = _load_sfx("gunshot", _make_gunshot, gain=1.15)
+        self.ping    = _load_sfx("ping",    _make_ping)
 
     # ── SFX ──────────────────────────────────────────────────────────────────
 
@@ -131,6 +146,10 @@ class SoundManager:
             self.gunshot.play()
         self.stop_wind()
 
+    def play_ping(self):
+        if self._s.sound_on:
+            self.ping.play()
+
     # ── Ambient music ─────────────────────────────────────────────────────────
 
     def start_wind(self):
@@ -141,13 +160,13 @@ class SoundManager:
         pygame.mixer.music.play(-1)
         self._wind_playing = True
 
-    def stop_wind(self, fade_ms: int = 500):
+    def stop_wind(self):
         if self._wind_playing:
-            pygame.mixer.music.fadeout(fade_ms)
+            pygame.mixer.music.stop()
             self._wind_playing = False
 
     def on_music_toggle(self):
         if self._s.music_on:
             self.start_wind()
         else:
-            self.stop_wind(0)
+            self.stop_wind()

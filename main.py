@@ -753,6 +753,8 @@ def main_v2():
                 snd.start_wind()
             elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT):
                 snd.stop_wind()
+            if sess.state == State.DRAW:
+                snd.play_ping()
             prev_state = sess.state
 
         # Render
