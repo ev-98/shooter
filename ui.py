@@ -130,12 +130,9 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int):
     W, H = surf.get_size()
     # Title flicker every 40 frames
     tcol = DRAW_COL if (tick // 20) % 2 == 0 else WIN_COL
-    pixel_text(surf, "HIGH NOON", fonts["big"], tcol, W // 2, H // 4)
-    pixel_text(surf, "SHOWDOWN", fonts["big"], TEXT_WARM, W // 2, H // 4 + 52)
+    pixel_text(surf, "PY NOON", fonts["big"], tcol, W // 2, H // 4)
     pixel_text(surf, "[ PRESS ENTER TO START ]", fonts["med"], TEXT_DIM,
                W // 2, H // 2 + 20)
-    pixel_text(surf, "SOLO  /  LOCAL  /  ONLINE", fonts["small"], TEXT_DIM,
-               W // 2, H * 3 // 4)
 
 
 def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
@@ -155,7 +152,6 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
             pygame.draw.rect(surf, (60, 40, 10),
                              (W // 2 - 200, cy - 22, 400, 44), border_radius=4)
         pixel_text(surf, label, fonts["med"], col, W // 2, cy)
-        pixel_text(surf, sub, fonts["small"], TEXT_DIM, W // 2, cy + 24)
     pixel_text(surf, "UP / DOWN  to choose   ENTER to confirm",
                fonts["small"], TEXT_DIM, W // 2, H - 40)
 
