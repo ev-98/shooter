@@ -9,6 +9,9 @@ class Mode(Enum):
     ONLINE = auto()
 
 
+WIN_SCORE = 10  # first to this many wins takes the match
+
+
 class State(Enum):
     MENU = auto()
     ONLINE_SETUP = auto()   # host/join selection + text input
@@ -19,6 +22,7 @@ class State(Enum):
     RESULT = auto()         # round over, show winner
     TIMEOUT = auto()        # nobody fired in time
     SETTINGS = auto()       # settings screen
+    VICTORY = auto()        # match over — someone reached WIN_SCORE
 
 
 class Settings:

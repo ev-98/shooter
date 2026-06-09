@@ -21,7 +21,7 @@ import time
 import pygame
 
 from client import NetworkClient
-from game import Mode, Session, Settings, State
+from game import Mode, Session, Settings, State, WIN_SCORE
 from sounds import SoundManager
 from ui import (
     make_fonts,
@@ -34,6 +34,7 @@ from ui import (
     render_result,
     render_settings,
     render_timeout,
+    render_victory,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -673,6 +674,21 @@ def main_v2():
                             sess.state = State.MENU
                             _in_mode_select = True
 
+                # Victory (match over)
+                elif sess.state == State.VICTORY:
+                    if k == pygame.K_r and sess.mode != Mode.ONLINE:
+                        sess.scores = [0, 0]
+                        _start_local_round(sess)
+                        draw_trigger_ref[0] = reset_draw_timer()
+                    elif k == pygame.K_ESCAPE:
+                        if sess.mode == Mode.ONLINE:
+                            net.close()
+                            online_phase_ref[0] = "choose"
+                            sess.state = State.ONLINE_SETUP
+                        else:
+                            sess.state = State.MENU
+                            _in_mode_select = True
+
                 # Timeout
                 elif sess.state == State.TIMEOUT:
                     if k == pygame.K_r:
@@ -746,12 +762,17 @@ def main_v2():
                 net, sess, op, join_code_buf)
             op = online_phase_ref[0]
 
+        # First-to-WIN_SCORE match victory (LOCAL / ONLINE only)
+        if sess.state == State.RESULT and sess.mode != Mode.SOLO:
+            if max(sess.scores) >= WIN_SCORE:
+                sess.state = State.VICTORY
+
         flash_val = max(0.0, flash_val - 0.04)
 
         if sess.state != prev_state:
             if sess.state in (State.MENU, State.READY, State.LOBBY):
                 snd.start_wind()
-            elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT):
+            elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT, State.VICTORY):
                 snd.stop_wind()
             if sess.state == State.DRAW:
                 snd.play_ping()
@@ -790,6 +811,9 @@ def main_v2():
                           best_solo=sess.best_solo)
         elif st == State.TIMEOUT:
             render_timeout(surf, fonts)
+        elif st == State.VICTORY:
+            render_victory(surf, fonts, sess.scores, p1l, p2l,
+                           is_online=sess.mode == Mode.ONLINE)
         elif st == State.SETTINGS:
             render_settings(surf, fonts, sess.settings,
                             settings_selected, settings_listening)
