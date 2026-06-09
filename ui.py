@@ -356,7 +356,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
 def render_match_intro(surf: pygame.Surface, fonts: dict):
     draw_bg(surf)
     W, H = surf.get_size()
-    pixel_text(surf, "FIRST TO 10", fonts["big"], WIN_COL, W // 2, H // 2)
+    pixel_text(surf, "FIRST TO 10", fonts["big"], WIN_COL, W // 2, H // 3)
 
 
 def render_victory(surf: pygame.Surface, fonts: dict, scores: list,
