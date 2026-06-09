@@ -27,6 +27,7 @@ from ui import (
     make_fonts,
     render_draw,
     render_lobby,
+    render_match_intro,
     render_menu,
     render_mode_select,
     render_online_setup,
@@ -490,8 +491,7 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
             sess.mode = Mode.LOCAL
             sess.scores = [0, 0]
             sess.reset_round()
-            sess.state = State.READY
-            draw_trigger_ref[0] = reset_draw_timer()
+            sess.state = State.MATCH_INTRO
         elif _mode_select_idx == 2:     # ONLINE
             sess.mode = Mode.ONLINE
             sess.scores = [0, 0]
@@ -529,6 +529,7 @@ def main_v2():
     input_focus       = "ip"
     cursor_tick       = 0
     flash_val         = 0.0
+    match_intro_until = 0.0
 
     settings_selected  = 0    # cursor in settings screen
     settings_listening = False # waiting for a new key binding
@@ -678,8 +679,8 @@ def main_v2():
                 elif sess.state == State.VICTORY:
                     if k == pygame.K_r and sess.mode != Mode.ONLINE:
                         sess.scores = [0, 0]
-                        _start_local_round(sess)
-                        draw_trigger_ref[0] = reset_draw_timer()
+                        sess.reset_round()
+                        sess.state = State.MATCH_INTRO
                     elif k == pygame.K_ESCAPE:
                         if sess.mode == Mode.ONLINE:
                             net.close()
@@ -770,13 +771,21 @@ def main_v2():
         flash_val = max(0.0, flash_val - 0.04)
 
         if sess.state != prev_state:
-            if sess.state in (State.MENU, State.READY, State.LOBBY):
+            if sess.state == State.MATCH_INTRO:
+                match_intro_until = time.perf_counter() + 2.0
+            if sess.state in (State.MENU, State.READY, State.LOBBY, State.MATCH_INTRO):
                 snd.start_wind()
             elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT, State.VICTORY):
                 snd.stop_wind()
             if sess.state == State.DRAW:
                 snd.play_ping()
             prev_state = sess.state
+
+        # Match intro auto-advance after 2 seconds
+        if sess.state == State.MATCH_INTRO:
+            if time.perf_counter() >= match_intro_until:
+                _start_local_round(sess)
+                draw_trigger_ref[0] = reset_draw_timer()
 
         # Render
         p1l, p2l = player_labels(sess)
@@ -794,6 +803,8 @@ def main_v2():
             ti = join_ip_ref[0] if input_focus == "ip" else join_code_buf
             render_online_setup(surf, fonts, ph_disp, ti, input_focus,
                                 sess.online_error, sess.online_code, cursor_on)
+        elif st == State.MATCH_INTRO:
+            render_match_intro(surf, fonts)
         elif st == State.LOBBY:
             render_lobby(surf, fonts, tick)
         elif st == State.READY:

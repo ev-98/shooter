@@ -23,6 +23,7 @@ class State(Enum):
     TIMEOUT = auto()        # nobody fired in time
     SETTINGS = auto()       # settings screen
     VICTORY = auto()        # match over — someone reached WIN_SCORE
+    MATCH_INTRO = auto()    # brief "first to N" splash before first round
 
 
 class Settings:
