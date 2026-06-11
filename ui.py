@@ -141,7 +141,7 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
     pixel_text(surf, "SELECT MODE", fonts["med"], TEXT_WARM, W // 2, H // 5)
     options = [
         ("1  SOLO   PRACTICE", "beat your best reaction time"),
-        ("2  LOCAL  CO-OP", "same keyboard, two cowboys"),
+        ("2  LOCAL  VS", "same keyboard, two cowboys"),
         ("3  ONLINE DUEL", "connect with a friend via code"),
         ("4  SETTINGS", "configure controls, sound & music"),
     ]
