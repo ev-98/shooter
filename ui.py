@@ -141,7 +141,7 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
     pixel_text(surf, "SELECT MODE", fonts["med"], TEXT_WARM, W // 2, H // 5)
     options = [
         ("1  SOLO   PRACTICE", "beat your best reaction time"),
-        ("2  LOCAL  VS", "same keyboard, two cowboys"),
+        ("2  LOCAL  DUEL", "same keyboard, two cowboys"),
         ("3  ONLINE DUEL", "connect with a friend via code"),
         ("4  SETTINGS", "configure controls, sound & music"),
     ]
@@ -310,8 +310,8 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   winner: int | None, false_start_player: int | None,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
-                  best_solo=None):
-    draw_bg(surf)
+                  best_solo=None, flash: float = 0.0):
+    draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
     ground_y = horizon + 30
@@ -325,20 +325,35 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
     if false_start_player is not None:
-        labels = [p1_label, p2_label]
-        pixel_text(surf, f"{labels[false_start_player]} JUMPED THE GUN!",
-                   fonts["med"], LOSE_COL, W // 2, H // 5)
-        pixel_text(surf, f"{labels[1 - false_start_player]} WINS",
-                   fonts["big"], WIN_COL, W // 2, H // 5 + 60)
+        from game import Mode
+        if mode == Mode.SOLO:
+            pixel_text(surf, "YOU JUMPED THE GUN!", fonts["big"], LOSE_COL, W // 2, H // 5)
+        else:
+            labels = [p1_label, p2_label]
+            pixel_text(surf, f"{labels[false_start_player]} JUMPED THE GUN!",
+                       fonts["med"], LOSE_COL, W // 2, H // 5)
+            pixel_text(surf, f"{labels[1 - false_start_player]} WINS",
+                       fonts["big"], WIN_COL, W // 2, H // 5 + 60)
     elif winner is not None:
-        labels = [p1_label, p2_label]
-        pixel_text(surf, f"{labels[winner]}  WINS!", fonts["big"],
-                   WIN_COL, W // 2, H // 5)
-        for idx, ms in sorted(times.items()):
-            col = WIN_COL if idx == winner else TEXT_DIM
-            label = labels[idx]
-            cy = H // 5 + 60 + (idx * 32)
-            pixel_text(surf, f"{label}  {ms} ms", fonts["med"], col, W // 2, cy)
+        from game import Mode
+        if mode == Mode.SOLO:
+            ms = times.get(0)
+            is_new_record = ms is not None and ms == best_solo
+            if is_new_record:
+                pixel_text(surf, "NEW RECORD!", fonts["big"], WIN_COL, W // 2, H // 5)
+            if ms is not None:
+                cy = H // 5 + (60 if is_new_record else 0)
+                col = WIN_COL if is_new_record else TEXT_WARM
+                pixel_text(surf, f"{ms} ms", fonts["med"], col, W // 2, cy)
+        else:
+            labels = [p1_label, p2_label]
+            pixel_text(surf, f"{labels[winner]}  WINS!", fonts["big"],
+                       WIN_COL, W // 2, H // 5)
+            for idx, ms in sorted(times.items()):
+                col = WIN_COL if idx == winner else TEXT_DIM
+                label = labels[idx]
+                cy = H // 5 + 60 + (idx * 32)
+                pixel_text(surf, f"{label}  {ms} ms", fonts["med"], col, W // 2, cy)
 
     # Rematch prompt
     if is_online:
@@ -406,12 +421,12 @@ def _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H,
     if mode == Mode.SOLO:
         best_str = f"{best_solo} ms" if best_solo is not None else "--"
         pixel_text(surf, f"BEST  {best_str}",
-                   fonts["small"], TEXT_DIM, W // 2, 20)
+                   fonts["score"], TEXT_DIM, W // 2, 24)
     else:
         pixel_text_left(surf, f"{p1_label}  {scores[0]}",
-                        fonts["med"], TEXT_WARM, 20, 14)
-        r = fonts["med"].render(f"{scores[1]}  {p2_label}", False, TEXT_WARM)
-        surf.blit(r, (W - r.get_width() - 20, 14))
+                        fonts["score"], TEXT_WARM, 20, 10)
+        r = fonts["score"].render(f"{scores[1]}  {p2_label}", False, TEXT_WARM)
+        surf.blit(r, (W - r.get_width() - 20, 10))
 
 
 def _draw_key_hints(surf, fonts, mode, W, H, settings=None):
@@ -438,6 +453,7 @@ def make_fonts() -> dict:
     name = pygame.font.match_font(" ".join(candidates)) or ""
     return {
         "big":   pygame.font.Font(name or None, 48),
+        "score": pygame.font.Font(name or None, 36),
         "med":   pygame.font.Font(name or None, 28),
         "small": pygame.font.Font(name or None, 18),
     }

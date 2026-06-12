@@ -449,7 +449,8 @@ def _render(surf, fonts, sess: Session, tick: int, flash: float,
                       sess.false_start_player, sess.last_times,
                       sess.scores, p1l, p2l,
                       is_online=sess.mode == Mode.ONLINE,
-                      is_host=sess.is_host)
+                      is_host=sess.is_host,
+                      flash=flash)
 
     elif st == State.TIMEOUT:
         render_timeout(surf, fonts)
@@ -819,7 +820,8 @@ def main_v2():
                           sess.scores, p1l, p2l,
                           is_online=sess.mode == Mode.ONLINE,
                           is_host=sess.is_host,
-                          best_solo=sess.best_solo)
+                          best_solo=sess.best_solo,
+                          flash=flash_val)
         elif st == State.TIMEOUT:
             render_timeout(surf, fonts)
         elif st == State.VICTORY:
