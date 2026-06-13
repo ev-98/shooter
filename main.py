@@ -651,11 +651,14 @@ def main_v2():
 
                 # Result
                 elif sess.state == State.RESULT:
-                    if k == pygame.K_r:
+                    if sess.mode == Mode.SOLO and k == pygame.K_SPACE:
+                        _start_local_round(sess)
+                        draw_trigger_ref[0] = reset_draw_timer()
+                    elif k == pygame.K_r:
                         if sess.mode == Mode.ONLINE:
                             if sess.is_host:
                                 net.send({"type": "rematch"})
-                        else:
+                        elif sess.mode == Mode.LOCAL:
                             _start_local_round(sess)
                             draw_trigger_ref[0] = reset_draw_timer()
                     elif k == pygame.K_ESCAPE:
@@ -767,7 +770,7 @@ def main_v2():
             elif sess.state != State.RESULT:
                 result_entered_at = None
             if sess.state == State.MATCH_INTRO:
-                match_intro_until = time.perf_counter() + 2.0
+                match_intro_until = time.perf_counter() + 3.0
             if sess.state in (State.MENU, State.READY, State.LOBBY, State.MATCH_INTRO):
                 snd.start_wind()
             elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT, State.VICTORY):
@@ -818,7 +821,9 @@ def main_v2():
                 render_online_setup(surf, fonts, ph_disp, join_code_buf,
                                     sess.online_error, sess.online_code, cursor_on)
             elif st == State.MATCH_INTRO:
-                render_match_intro(surf, fonts)
+                _now = time.perf_counter()
+                render_match_intro(surf, fonts,
+                                   show_text=match_intro_until - 2.0 <= _now < match_intro_until - 1.0)
             elif st == State.LOBBY:
                 render_lobby(surf, fonts, tick)
             elif st == State.READY:

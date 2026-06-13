@@ -365,16 +365,21 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     else:
         from game import Mode as _Mode
         if mode == _Mode.SOLO:
-            pixel_text(surf, "R  PLAY AGAIN", fonts["small"], TEXT_DIM, W // 2, H - 50)
+            pixel_text(surf, "SPACE  PLAY AGAIN", fonts["small"], TEXT_DIM, W // 2, H - 50)
         else:
             pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
         pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 
-def render_match_intro(surf: pygame.Surface, fonts: dict):
+def render_match_intro(surf: pygame.Surface, fonts: dict, show_text: bool = True):
     draw_bg(surf)
     W, H = surf.get_size()
-    pixel_text(surf, "FIRST TO 10", fonts["big"], WIN_COL, W // 2, H // 3)
+    horizon = int(H * 0.62)
+    ground_y = horizon + 30
+    draw_cowboy(surf, W // 4,     ground_y - SPRITE_H // 2, facing_right=True)
+    draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
+    if show_text:
+        pixel_text(surf, "FIRST TO 10", fonts["big"], WIN_COL, W // 2, H // 3)
 
 
 def render_victory(surf: pygame.Surface, fonts: dict, scores: list,
