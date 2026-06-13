@@ -57,11 +57,13 @@ DRAW_MAX   = 5.0
 
 def player_labels(session: Session):
     if session.mode == Mode.ONLINE:
-        my   = "YOU"
-        them = "OPPONENT"
+        my_name  = (session.settings.player_name or "YOU").upper()
+        opp_name = (session.opponent_name or "OPPONENT").upper()
         if session.player_idx == 0:
-            return my, them
-        return them, my
+            return my_name, opp_name
+        return opp_name, my_name
+    if session.mode == Mode.SOLO:
+        return (session.settings.player_name or "PLAYER").upper(), ""
     return "P1", "P2"
 
 
@@ -351,6 +353,9 @@ def _poll_network(net: NetworkClient, sess: Session,
             sess.online_code = msg.get("code", "")
 
         elif t == "start":
+            names = msg.get("names", {})
+            opp_idx = str(1 - (sess.player_idx or 0))
+            sess.opponent_name = names.get(opp_idx, "OPPONENT")
             sess.reset_round()
             sess.state = State.LOBBY
 
@@ -404,10 +409,11 @@ def _online_phase_sync(net: NetworkClient, sess: Session,
                        online_phase: str, join_code_buf: str) -> str:
     """Transition online_phase based on connection + session state."""
     if online_phase == "host_connecting" and net.connected:
-        net.send({"type": "create"})
+        net.send({"type": "create", "name": sess.settings.player_name})
         return "host_wait"
     if online_phase == "join_connecting" and net.connected:
-        net.send({"type": "join", "code": join_code_buf})
+        net.send({"type": "join", "code": join_code_buf,
+                  "name": sess.settings.player_name})
         return "join_wait"
     if online_phase == "join_wait" and sess.state in (State.LOBBY, State.READY):
         return "in_game"
@@ -491,7 +497,10 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
         _in_mode_select = False
         sess.state = State.MENU
         return True
-    if key in (pygame.K_RETURN, pygame.K_SPACE):
+    _direct = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2, pygame.K_4: 3}
+    if key in _direct:
+        _mode_select_idx = _direct[key]
+    if key in (pygame.K_RETURN, pygame.K_SPACE) or key in _direct:
         _in_mode_select = False
         if _mode_select_idx == 0:       # SOLO
             sess.mode = Mode.SOLO
@@ -548,6 +557,7 @@ def main_v2():
     splash_start      = time.perf_counter()
 
     settings_selected  = 0    # cursor in settings screen
+    name_editing       = False
 
     global _in_mode_select, _mode_select_idx
     _in_mode_select = False
@@ -602,6 +612,7 @@ def main_v2():
                             online_phase_ref[0] = "host_connecting"
                             sess.is_host = True
                             sess.player_idx = 0
+                            sess.opponent_name = ""
                         elif k == pygame.K_j:
                             online_phase_ref[0] = "join_code"
                             join_code_buf = ""
@@ -728,22 +739,34 @@ def main_v2():
 
                 # Settings
                 elif sess.state == State.SETTINGS:
-                    if k in (pygame.K_UP, pygame.K_w):
-                        settings_selected = (settings_selected - 1) % 2
-                        snd.play_blip()
-                    elif k in (pygame.K_DOWN, pygame.K_s):
-                        settings_selected = (settings_selected + 1) % 2
-                        snd.play_blip()
-                    elif k in (pygame.K_RETURN, pygame.K_SPACE):
-                        snd.play_confirm()
-                        if settings_selected == 0:
-                            sess.settings.sound_on = not sess.settings.sound_on
-                        elif settings_selected == 1:
-                            sess.settings.music_on = not sess.settings.music_on
-                            snd.on_music_toggle()
-                    elif k == pygame.K_ESCAPE:
-                        sess.state = State.MENU
-                        _in_mode_select = True
+                    if name_editing:
+                        if k == pygame.K_ESCAPE or k in (pygame.K_RETURN, pygame.K_SPACE):
+                            name_editing = False
+                        elif k == pygame.K_BACKSPACE:
+                            sess.settings.player_name = sess.settings.player_name[:-1]
+                        else:
+                            ch = event.unicode.upper()
+                            if ch.isalnum() and len(sess.settings.player_name) < 8:
+                                sess.settings.player_name += ch
+                    else:
+                        if k in (pygame.K_UP, pygame.K_w):
+                            settings_selected = (settings_selected - 1) % 3
+                            snd.play_blip()
+                        elif k in (pygame.K_DOWN, pygame.K_s):
+                            settings_selected = (settings_selected + 1) % 3
+                            snd.play_blip()
+                        elif k in (pygame.K_RETURN, pygame.K_SPACE):
+                            snd.play_confirm()
+                            if settings_selected == 0:
+                                name_editing = True
+                            elif settings_selected == 1:
+                                sess.settings.sound_on = not sess.settings.sound_on
+                            elif settings_selected == 2:
+                                sess.settings.music_on = not sess.settings.music_on
+                                snd.on_music_toggle()
+                        elif k == pygame.K_ESCAPE:
+                            sess.state = State.MENU
+                            _in_mode_select = True
 
         op = online_phase_ref[0]
 
@@ -870,7 +893,7 @@ def main_v2():
                 render_victory(surf, fonts, sess.scores, p1l, p2l,
                                is_online=sess.mode == Mode.ONLINE)
             elif st == State.SETTINGS:
-                render_settings(surf, fonts, sess.settings, settings_selected)
+                render_settings(surf, fonts, sess.settings, settings_selected, name_editing)
 
         if splash_done and intro_fade < 1.6 and tick % 3 == 0:
             intro_fade = min(1.6, intro_fade + 1 / 60)  # overlay clears at 1.0, title at 1.25, help text at 1.6

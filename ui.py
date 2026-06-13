@@ -20,6 +20,8 @@ UI_BG      = ( 30,  18,   5)
 INPUT_COL  = ( 60,  40,  15)
 CURSOR_COL = (255, 200,  50)
 CACTUS     = ( 40,  90,  20)
+P1_COL     = (255,   0,   0)   # red for P1 in local
+P2_COL     = (  0,   0, 255)   # blue for P2 in local
 
 # ── Pixel scale for sprites ───────────────────────────────────────────────────
 PX = 5   # screen pixels per logical pixel
@@ -174,16 +176,19 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
             pygame.draw.rect(surf, (60, 40, 10),
                              (W // 2 - 200, cy - 22, 400, 44), border_radius=4)
         pixel_text(surf, label, fonts["med"], col, W // 2, cy)
-    pixel_text(surf, "UP / DOWN  TO CHOOSE   SPACE TO CONFIRM",
-               fonts["small"], TEXT_DIM, W // 2, H - 40)
+    pixel_text(surf, "UP / DOWN  TO CHOOSE   |   SPACE  TO CONFIRM",
+               fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
 
-def render_settings(surf: pygame.Surface, fonts: dict, settings, selected: int):
+def render_settings(surf: pygame.Surface, fonts: dict, settings,
+                    selected: int, name_editing: bool = False):
     draw_bg(surf)
     W, H = surf.get_size()
     pixel_text(surf, "SETTINGS", fonts["med"], DRAW_COL, W // 2, H // 6)
 
+    name_display = settings.player_name + ("|" if name_editing else "")
     items = [
+        ("NAME",  name_display),
         ("SOUND", "ON" if settings.sound_on else "OFF"),
         ("MUSIC", "ON" if settings.music_on else "OFF"),
     ]
@@ -194,11 +199,14 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings, selected: int):
         if i == selected:
             pygame.draw.rect(surf, (60, 40, 10),
                              (W // 2 - 210, cy - 20, 420, 40), border_radius=4)
+            if name_editing and i == 0:
+                col = DRAW_COL
         pixel_text(surf, label, fonts["med"], col, W // 2 - 80, cy)
         pixel_text(surf, value, fonts["med"], col, W // 2 + 90, cy)
 
-    pixel_text(surf, "UP/DOWN SELECT   SPACE CHANGE   ESC BACK",
-               fonts["small"], TEXT_DIM, W // 2, H - 40)
+    hint = "TYPE NAME   |   ENTER  CONFIRM   |   ESC  CANCEL" if name_editing else \
+           "UP / DOWN  SELECT   |   SPACE  CHANGE   |   ESC  BACK"
+    pixel_text(surf, hint, fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
 
 def render_online_setup(surf: pygame.Surface, fonts: dict,
@@ -212,7 +220,7 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
     if phase == "choose":
         pixel_text(surf, "H  HOST A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 20)
         pixel_text(surf, "J  JOIN A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 80)
-        pixel_text(surf, "ESC  BACK", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "ESC   BACK", fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
     elif phase == "host_wait":
         pixel_text(surf, "YOUR ROOM CODE", fonts["med"], TEXT_DIM, W // 2, H // 3)
@@ -221,7 +229,7 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
                    fonts["small"], TEXT_DIM, W // 2, H // 3 + 110)
         pixel_text(surf, "WAITING FOR OPPONENT...", fonts["small"], TEXT_WARM,
                    W // 2, H * 2 // 3)
-        pixel_text(surf, "ESC  CANCEL", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "ESC   CANCEL", fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
     elif phase == "join_code":
         pixel_text(surf, "ENTER ROOM CODE", fonts["med"], TEXT_DIM, W // 2, H // 3)
@@ -232,8 +240,8 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
         cursor = "|" if cursor_on else ""
         pixel_text(surf, join_code_buf + cursor, fonts["big"], DRAW_COL,
                    W // 2, H // 2 + 14)
-        pixel_text(surf, "SPACE TO CONNECT   ESC BACK",
-                   fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "SPACE  TO CONNECT   |   ESC  BACK",
+                   fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
     if error:
         pixel_text(surf, error, fonts["small"], LOSE_COL, W // 2, H * 5 // 6)
@@ -248,6 +256,24 @@ def render_lobby(surf: pygame.Surface, fonts: dict, tick: int):
     pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
+def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H):
+    from game import Mode
+    horizon = int(H * 0.62)
+    ground_y = horizon + 30
+    label_y = ground_y - SPRITE_H - 22
+    # P1 hat sits ~5px left of sprite centre; P2 (mirrored) sits ~5px right
+    p1_x = W // 4     - 5
+    p2_x = W * 3 // 4 + 5
+    if mode == Mode.SOLO:
+        pixel_text(surf, p1_label, fonts["med"], DRAW_COL, p1_x, label_y)
+    elif mode == Mode.LOCAL:
+        pixel_text(surf, "P1", fonts["med"], P1_COL, p1_x, label_y)
+        pixel_text(surf, "P2", fonts["med"], P2_COL, p2_x, label_y)
+    elif mode == Mode.ONLINE:
+        pixel_text(surf, p1_label, fonts["med"], DRAW_COL, p1_x, label_y)
+        pixel_text(surf, p2_label, fonts["med"], DRAW_COL, p2_x, label_y)
+
+
 def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
                  mode, scores: list, p1_label: str, p2_label: str,
                  best_solo=None, settings=None):
@@ -259,6 +285,7 @@ def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
     # Cowboys in stance
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
 
     # Scores
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
@@ -285,6 +312,7 @@ def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
 
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
@@ -319,6 +347,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     p2_fired = winner != 1
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True,  fired=p1_fired)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False, fired=p2_fired)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
@@ -455,7 +484,7 @@ def _draw_key_hints(surf, fonts, mode, W, H, settings=None, prompt_char=None):
         pixel_text(surf, f"[{p1_name}]  P1 FIRE          P2 FIRE  [{p2_name}]",
                    fonts["small"], TEXT_DIM, W // 2, H - 30)
     elif prompt_char is not None:
-        pixel_text(surf, "WRONG KEY = MISFIRE", fonts["hint"], LOSE_COL, W // 2, H - 30)
+        pass
     elif mode in (Mode.SOLO, Mode.ONLINE):
         pixel_text(surf, "WATCH FOR YOUR KEY...", fonts["hint"], TEXT_DIM, W // 2, H - 30)
     else:

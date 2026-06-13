@@ -37,6 +37,7 @@ class Settings:
         self.p2_key:   int = 1073742053  # pygame.K_RSHIFT
         self.sound_on: bool = True
         self.music_on: bool = True
+        self.player_name: str = "PLAYER"
 
 
 class Session:
@@ -54,6 +55,7 @@ class Session:
         self.is_host: bool = False
         self.text_input: str = ""           # reused for IP / room code entry
         self.online_error: str = ""
+        self.opponent_name: str = ""
         self.settings: Settings = Settings()
         self.prompt_char: str | None = None  # random alphanumeric shown on DRAW (None = LOCAL)
         self.misfire_player: int | None = None

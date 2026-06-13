@@ -33,6 +33,7 @@ class Room:
         self.draw_time: float | None = None
         self._resolve_task = None
         self.prompt_key: str | None = None
+        self.player_names: dict = {}
 
     async def broadcast(self, msg: dict):
         data = json.dumps(msg)
@@ -136,6 +137,7 @@ async def handler(websocket):
                 code = gen_code()
                 room = Room(code)
                 room.players.append(websocket)
+                room.player_names[0] = msg.get("name", "PLAYER")[:8].upper()
                 rooms[code] = room
                 player_idx = 0
                 await websocket.send(json.dumps({"type": "created", "code": code}))
@@ -150,9 +152,10 @@ async def handler(websocket):
                     await websocket.send(json.dumps({"type": "error", "msg": "Room full"}))
                     continue
                 room.players.append(websocket)
+                room.player_names[1] = msg.get("name", "PLAYER")[:8].upper()
                 player_idx = 1
                 await websocket.send(json.dumps({"type": "joined", "code": code}))
-                await room.broadcast({"type": "start"})
+                await room.broadcast({"type": "start", "names": room.player_names})
                 asyncio.create_task(room.start_round())
 
             elif t == "fire" and room is not None and player_idx is not None:
