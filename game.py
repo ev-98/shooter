@@ -132,7 +132,7 @@ class Session:
             return "ignored"
         if player_idx in self.last_times:
             return "already_fired"
-        ms = int((time.perf_counter() - self.draw_time) * 1000)
+        ms = round((time.perf_counter() - self.draw_time) * 1000, 2)
         self.last_times[player_idx] = ms
         return "ok"
 

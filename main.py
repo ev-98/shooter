@@ -723,10 +723,7 @@ def main_v2():
 
                 # Result
                 elif sess.state == State.RESULT:
-                    if sess.mode == Mode.SOLO and k == pygame.K_SPACE:
-                        _start_local_round(sess)
-                        draw_trigger_ref[0] = reset_draw_timer()
-                    elif k == pygame.K_r:
+                    if k == pygame.K_r:
                         if sess.mode == Mode.ONLINE:
                             if sess.is_host:
                                 net.send({"type": "rematch"})
@@ -744,7 +741,7 @@ def main_v2():
 
                 # Victory (match over)
                 elif sess.state == State.VICTORY:
-                    if k == pygame.K_r and sess.mode != Mode.ONLINE:
+                    if k == pygame.K_SPACE and sess.mode != Mode.ONLINE:
                         sess.scores = [0, 0]
                         sess.reset_round()
                         sess.state = State.MATCH_INTRO
@@ -849,7 +846,7 @@ def main_v2():
                 my = sess.player_idx or 0
                 if sess.scores[my] > sess.scores[1 - my]:
                     sess.online_wins += 1
-            if sess.state == State.RESULT and sess.mode == Mode.LOCAL:
+            if sess.state == State.RESULT and sess.mode in (Mode.LOCAL, Mode.SOLO):
                 result_entered_at = time.perf_counter()
             elif sess.state != State.RESULT:
                 result_entered_at = None
@@ -879,8 +876,8 @@ def main_v2():
                 _start_local_round(sess)
                 draw_trigger_ref[0] = reset_draw_timer()
 
-        # Result auto-advance after 3 seconds (LOCAL duel only)
-        if sess.state == State.RESULT and sess.mode == Mode.LOCAL and result_entered_at is not None:
+        # Result auto-advance after 3 seconds (LOCAL duel and SOLO)
+        if sess.state == State.RESULT and sess.mode in (Mode.LOCAL, Mode.SOLO) and result_entered_at is not None:
             if time.perf_counter() - result_entered_at >= 3.0:
                 result_entered_at = None
                 _start_local_round(sess)

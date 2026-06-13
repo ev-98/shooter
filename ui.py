@@ -429,16 +429,19 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
             if ms is not None:
                 cy = H // 5 + (60 if is_new_record else 0)
                 col = WIN_COL if is_new_record else TEXT_WARM
-                pixel_text(surf, f"{ms} ms", fonts["med"], col, W // 2, cy)
+                pixel_text(surf, f"{int(ms)} ms", fonts["med"], col, W // 2, cy)
         else:
             labels = [p1_label, p2_label]
             pixel_text(surf, f"{labels[winner]}  WINS!", fonts["big"],
                        WIN_COL, W // 2, H // 5)
+            time_vals = list(times.values())
+            show_decimal = len(time_vals) == 2 and int(time_vals[0]) == int(time_vals[1])
             for idx, ms in sorted(times.items()):
                 col = WIN_COL if idx == winner else TEXT_DIM
                 label = labels[idx]
                 cy = H // 5 + 60 + (idx * 32)
-                pixel_text(surf, f"{label}  {ms} ms", fonts["med"], col, W // 2, cy)
+                ms_str = f"{ms:.2f}" if show_decimal else str(int(ms))
+                pixel_text(surf, f"{label}  {ms_str} ms", fonts["med"], col, W // 2, cy)
 
     # Rematch prompt
     if is_online:
@@ -450,10 +453,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                        fonts["small"], TEXT_DIM, W // 2, H - 40)
     else:
         from game import Mode as _Mode
-        if mode == _Mode.SOLO:
-            pixel_text(surf, "SPACE  PLAY AGAIN", fonts["small"], TEXT_DIM, W // 2, H - 50)
-        else:
-            pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
+        pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
         pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 
@@ -484,7 +484,7 @@ def render_victory(surf: pygame.Surface, fonts: dict, scores: list,
     if is_online:
         pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 40)
     else:
-        pixel_text(surf, "R  new match     ESC  menu",
+        pixel_text(surf, "SPACE  new match     ESC  menu",
                    fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
