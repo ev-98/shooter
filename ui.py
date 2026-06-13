@@ -160,7 +160,7 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float 
 def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
     draw_bg(surf)
     W, H = surf.get_size()
-    pixel_text(surf, "SELECT MODE", fonts["med"], TEXT_WARM, W // 2, H // 5)
+    pixel_text(surf, "SELECT MODE", fonts["med"], DRAW_COL, W // 2, H // 5)
     options = [
         ("1  SOLO   PRACTICE", "BEAT YOUR BEST REACTION TIME"),
         ("2  LOCAL  DUEL", "SAME KEYBOARD, TWO COWBOYS"),
@@ -182,7 +182,7 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings,
                     selected: int, listening: bool):
     draw_bg(surf)
     W, H = surf.get_size()
-    pixel_text(surf, "SETTINGS", fonts["med"], TEXT_WARM, W // 2, H // 6)
+    pixel_text(surf, "SETTINGS", fonts["med"], DRAW_COL, W // 2, H // 6)
 
     solo_name  = pygame.key.name(settings.solo_key).upper()
     p1_name    = pygame.key.name(settings.p1_key).upper()
@@ -449,7 +449,8 @@ def _draw_key_hints(surf, fonts, mode, W, H, settings=None):
         pixel_text(surf, f"[{solo_name}]  FIRE",
                    fonts["small"], TEXT_DIM, W // 2, H - 30)
     else:
-        pixel_text(surf, "[SPACE]  FIRE",
+        solo_name = pygame.key.name(settings.solo_key).upper() if settings else "SPACE"
+        pixel_text(surf, f"[{solo_name}]  FIRE",
                    fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 

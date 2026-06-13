@@ -640,7 +640,7 @@ def main_v2():
                 # Draw
                 elif sess.state == State.DRAW:
                     if sess.mode == Mode.ONLINE:
-                        if k == pygame.K_SPACE:
+                        if k == sess.settings.solo_key:
                             net.send({"type": "fire"})
                             snd.play_gunshot()
                     else:
