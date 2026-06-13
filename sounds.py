@@ -122,9 +122,14 @@ def _load_sfx(base: str, fallback_fn, gain: float = 1.0) -> pygame.mixer.Sound:
 
 class SoundManager:
     def __init__(self, settings):
-        self._s            = settings
-        self._wind_path    = _find("wind")
-        self._wind_playing = False
+        self._s             = settings
+        self._wind_channel  = None
+        self._wind_paused   = False
+
+        wind_path  = _find("wind")
+        self.wind  = pygame.mixer.Sound(wind_path) if wind_path else None
+        if self.wind:
+            self.wind.set_volume(0.7)
 
         self.blip    = _load_sfx("blip",    _make_blip)
         self.confirm = _load_sfx("confirm", _make_confirm)
@@ -145,29 +150,40 @@ class SoundManager:
     def play_gunshot(self):
         if self._s.sound_on:
             self.gunshot.play()
-        self.stop_wind()
+        self._pause_wind()
 
     def play_ping(self):
         if self._s.sound_on:
             self.ping.play()
 
-    # ── Ambient music ─────────────────────────────────────────────────────────
+    # ── Ambient ───────────────────────────────────────────────────────────────
 
     def start_wind(self):
-        if not self._s.music_on or not self._wind_path or self._wind_playing:
+        if not self._s.sound_on or not self.wind:
             return
-        pygame.mixer.music.load(self._wind_path)
-        pygame.mixer.music.set_volume(0.5)
-        pygame.mixer.music.play(-1)
-        self._wind_playing = True
+        if self._wind_paused and self._wind_channel:
+            self._wind_channel.unpause()
+            self._wind_paused = False
+        elif not self._wind_channel or not self._wind_channel.get_busy():
+            self._wind_channel = self.wind.play(-1)
+            self._wind_paused  = False
+
+    def _pause_wind(self):
+        if self._wind_channel and not self._wind_paused:
+            self._wind_channel.pause()
+            self._wind_paused = True
 
     def stop_wind(self):
-        if self._wind_playing:
-            pygame.mixer.music.stop()
-            self._wind_playing = False
+        if self._wind_channel:
+            self._wind_channel.stop()
+            self._wind_channel = None
+        self._wind_paused = False
 
-    def on_music_toggle(self):
-        if self._s.music_on:
+    def on_sound_toggle(self):
+        if self._s.sound_on:
             self.start_wind()
         else:
             self.stop_wind()
+
+    def on_music_toggle(self):
+        pass  # placeholder for future music track

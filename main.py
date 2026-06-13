@@ -776,6 +776,7 @@ def main_v2():
                                 name_editing = True
                             elif settings_selected == 1:
                                 sess.settings.sound_on = not sess.settings.sound_on
+                                snd.on_sound_toggle()
                             elif settings_selected == 2:
                                 sess.settings.music_on = not sess.settings.music_on
                                 snd.on_music_toggle()
