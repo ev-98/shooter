@@ -8,8 +8,11 @@ import string
 import time
 from enum import Enum, auto
 
+from dotenv import load_dotenv
+load_dotenv()
+
 SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
-_SAVE_KEY = b"high-noon-showdown-v1"
+_SAVE_KEY = os.environ.get("SAVE_HMAC_KEY", "").encode()
 
 def _sign(data: dict) -> str:
     payload = json.dumps(data, sort_keys=True).encode()

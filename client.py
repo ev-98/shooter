@@ -6,11 +6,16 @@ times rather than packet-arrival order.
 """
 import asyncio
 import json
+import os
 import queue
 import threading
 import time
 
 import websockets
+from dotenv import load_dotenv
+
+load_dotenv()
+_SERVER_URL = os.environ.get("SERVER_URL", "ws://164.92.79.212:8765")
 
 
 class NetworkClient:
@@ -23,8 +28,9 @@ class NetworkClient:
         self._out_queue: asyncio.Queue | None = None
         self._draw_receive_time: float | None = None
 
-    def connect(self, url: str = "ws://localhost:8765"):
+    def connect(self, url: str = None):
         """Connect to relay server. Accepts full ws:// URL or bare host string."""
+        url = url or _SERVER_URL
         if not url.startswith("ws://") and not url.startswith("wss://"):
             url = f"ws://{url}:8765"
         self._url = url
