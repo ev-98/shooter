@@ -15,6 +15,7 @@ Run a server (for online mode):
 """
 import asyncio
 import math
+import os
 import random
 import sys
 import time
@@ -48,7 +49,7 @@ FPS        = 60
 TITLE      = "shooter"
 
 # Relay server — change to a hosted URL for internet play
-RELAY_URL  = "ws://localhost:8765"
+RELAY_URL  = os.environ.get("SERVER_URL", "ws://localhost:8765")
 
 # Solo / local draw timer bounds (seconds)
 DRAW_MIN   = 1.5
