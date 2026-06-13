@@ -178,7 +178,7 @@ async def handler(websocket):
             elif t == "join":
                 code = msg.get("code", "").strip().upper()
                 if code not in rooms:
-                    await websocket.send(json.dumps({"type": "error", "msg": "Room not found"}))
+                    await websocket.send(json.dumps({"type": "error", "msg": "ROOM NOT FOUND"}))
                     continue
                 room = rooms[code]
                 if len(room.players) >= 2:

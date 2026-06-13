@@ -245,7 +245,7 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
                    fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
     if error:
-        pixel_text(surf, error, fonts["small"], LOSE_COL, W // 2, H * 5 // 6)
+        pixel_text(surf, error, fonts["med"], LOSE_COL, W // 2, H * 5 // 6)
 
 
 def render_lobby(surf: pygame.Surface, fonts: dict, tick: int):

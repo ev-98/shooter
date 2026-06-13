@@ -163,6 +163,7 @@ def main():
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
                             online_phase = "choose"
+                            sess.online_error = ""
                         else:
                             ch = event.unicode
                             if input_focus == "ip" and ch in "0123456789.":
@@ -339,7 +340,8 @@ def _start_local_round(sess: Session):
 
 
 def _poll_network(net: NetworkClient, sess: Session,
-                  online_phase: str, join_code_buf: str, room_code: str):
+                  online_phase: str, join_code_buf: str, room_code: str,
+                  online_phase_ref: list | None = None):
     """Consume all pending network messages."""
     while True:
         msg = net.poll()
@@ -352,6 +354,7 @@ def _poll_network(net: NetworkClient, sess: Session,
 
         elif t == "joined":
             sess.online_code = msg.get("code", "")
+            sess.online_error = ""
 
         elif t == "start":
             names = msg.get("names", {})
@@ -408,6 +411,9 @@ def _poll_network(net: NetworkClient, sess: Session,
 
         elif t == "error":
             sess.online_error = msg.get("msg", "Unknown error")
+            if online_phase_ref is not None and online_phase in ("join_wait", "join_connecting"):
+                net.close()
+                online_phase_ref[0] = "join_code"
 
         elif t == "connect_error":
             sess.online_error = msg.get("msg", "Connection failed")
@@ -650,6 +656,7 @@ def main_v2():
                             join_code_buf = join_code_buf[:-1]
                         elif k == pygame.K_ESCAPE:
                             online_phase_ref[0] = "choose"
+                            sess.online_error = ""
                         else:
                             ch = event.unicode
                             if ch.isalpha() and len(join_code_buf) < 4:
@@ -659,6 +666,7 @@ def main_v2():
                         if k == pygame.K_ESCAPE:
                             net.close()
                             online_phase_ref[0] = "choose"
+                            sess.online_error = ""
 
                 # Lobby
                 elif sess.state == State.LOBBY:
@@ -824,9 +832,9 @@ def main_v2():
         # Network polling
         if sess.mode == Mode.ONLINE or op in (
                 "host_connecting", "join_connecting", "join_wait", "host_wait"):
-            _poll_network(net, sess, op, join_code_buf, sess.online_code)
-            online_phase_ref[0] = _online_phase_sync(
-                net, sess, op, join_code_buf)
+            _poll_network(net, sess, op, join_code_buf, sess.online_code, online_phase_ref)
+            if online_phase_ref[0] == op:
+                online_phase_ref[0] = _online_phase_sync(net, sess, op, join_code_buf)
             op = online_phase_ref[0]
 
         # First-to-WIN_SCORE match victory (LOCAL / ONLINE only)
