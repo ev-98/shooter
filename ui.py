@@ -310,7 +310,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   winner: int | None, false_start_player: int | None,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
-                  best_solo=None, flash: float = 0.0):
+                  best_solo=None, flash: float = 0.0, countdown: int = 3):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -364,8 +364,12 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
             pixel_text(surf, "Waiting for host...    ESC  quit",
                        fonts["small"], TEXT_DIM, W // 2, H - 40)
     else:
-        pixel_text(surf, "R  play again     ESC  menu",
-                   fonts["small"], TEXT_DIM, W // 2, H - 40)
+        from game import Mode as _Mode
+        if mode == _Mode.SOLO:
+            pixel_text(surf, "R  PLAY AGAIN", fonts["small"], TEXT_DIM, W // 2, H - 50)
+        else:
+            pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
+        pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 
 def render_match_intro(surf: pygame.Surface, fonts: dict):

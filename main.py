@@ -14,6 +14,7 @@ Run a server (for online mode):
     python server.py
 """
 import asyncio
+import math
 import random
 import sys
 import time
@@ -531,6 +532,7 @@ def main_v2():
     cursor_tick       = 0
     flash_val         = 0.0
     match_intro_until = 0.0
+    result_entered_at: float | None = None
 
     settings_selected  = 0    # cursor in settings screen
     settings_listening = False # waiting for a new key binding
@@ -772,6 +774,10 @@ def main_v2():
         flash_val = max(0.0, flash_val - 0.04)
 
         if sess.state != prev_state:
+            if sess.state == State.RESULT and sess.mode == Mode.LOCAL:
+                result_entered_at = time.perf_counter()
+            elif sess.state != State.RESULT:
+                result_entered_at = None
             if sess.state == State.MATCH_INTRO:
                 match_intro_until = time.perf_counter() + 2.0
             if sess.state in (State.MENU, State.READY, State.LOBBY, State.MATCH_INTRO):
@@ -785,6 +791,13 @@ def main_v2():
         # Match intro auto-advance after 2 seconds
         if sess.state == State.MATCH_INTRO:
             if time.perf_counter() >= match_intro_until:
+                _start_local_round(sess)
+                draw_trigger_ref[0] = reset_draw_timer()
+
+        # Result auto-advance after 3 seconds (LOCAL duel only)
+        if sess.state == State.RESULT and sess.mode == Mode.LOCAL and result_entered_at is not None:
+            if time.perf_counter() - result_entered_at >= 3.0:
+                result_entered_at = None
                 _start_local_round(sess)
                 draw_trigger_ref[0] = reset_draw_timer()
 
@@ -815,13 +828,18 @@ def main_v2():
             render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
                         flash_val, best_solo=sess.best_solo, settings=sess.settings)
         elif st == State.RESULT:
+            if result_entered_at is not None:
+                _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
+            else:
+                _cd = 3
             render_result(surf, fonts, sess.mode, sess.winner,
                           sess.false_start_player, sess.last_times,
                           sess.scores, p1l, p2l,
                           is_online=sess.mode == Mode.ONLINE,
                           is_host=sess.is_host,
                           best_solo=sess.best_solo,
-                          flash=flash_val)
+                          flash=flash_val,
+                          countdown=_cd)
         elif st == State.TIMEOUT:
             render_timeout(surf, fonts)
         elif st == State.VICTORY:
