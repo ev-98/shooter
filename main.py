@@ -385,6 +385,13 @@ def _poll_network(net: NetworkClient, sess: Session,
                 sess.scores[sess.winner % 2] += 1
             sess.state = State.RESULT
 
+        elif t == "cheat":
+            sess.cheat_player = msg["offender"]
+            sess.winner = msg["winner"]
+            if sess.winner is not None:
+                sess.scores[sess.winner % 2] += 1
+            sess.state = State.RESULT
+
         elif t == "result":
             sess.winner = msg["winner"]
             sess.last_times = {int(k): v for k, v in msg["times"].items()}
@@ -468,7 +475,8 @@ def _render(surf, fonts, sess: Session, tick: int, flash: float,
                       sess.scores, p1l, p2l,
                       is_online=sess.mode == Mode.ONLINE,
                       is_host=sess.is_host,
-                      flash=flash)
+                      flash=flash,
+                      cheat_player=sess.cheat_player)
 
     elif st == State.TIMEOUT:
         render_timeout(surf, fonts)
@@ -918,7 +926,8 @@ def main_v2():
                               countdown=_cd,
                               misfire_player=sess.misfire_player,
                               online_wins=sess.online_wins,
-                              pressed_display=sess.pressed_display)
+                              pressed_display=sess.pressed_display,
+                              cheat_player=sess.cheat_player)
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:

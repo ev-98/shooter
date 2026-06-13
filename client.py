@@ -59,6 +59,9 @@ class NetworkClient:
             msg = json.loads(raw)
             if msg.get("type") == "draw":
                 self._draw_receive_time = time.perf_counter()
+            elif msg.get("type") == "ping":
+                await self._ws.send(json.dumps({"type": "pong", "t": msg["t"]}))
+                continue
             self.incoming.put(msg)
 
     async def _send_loop(self):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WebSocket relay server for High Noon Showdown.
+WebSocket relay server for shooter.
 
 Standalone:  python server.py
 Embedded:    from server import start_background_server; start_background_server()
@@ -17,6 +17,9 @@ import websockets
 
 rooms: dict = {}
 
+MIN_REACTION_MS  = 80   # below this is physically impossible for a human
+RTT_TOLERANCE_MS = 50   # extra buffer for clock drift / jitter
+
 
 def gen_code() -> str:
     code = ''.join(random.choices(string.ascii_uppercase, k=4))
@@ -28,12 +31,19 @@ class Room:
         self.code = code
         self.players: list = []
         self.state = "waiting"
-        # fires stores {player_idx: reaction_ms} — client-reported for fairness
         self.fires: dict = {}
         self.draw_time: float | None = None
         self._resolve_task = None
         self.prompt_key: str | None = None
         self.player_names: dict = {}
+        self.player_rtt: dict = {}  # {player_idx: rtt_ms}
+
+    async def measure_rtt(self):
+        for idx, ws in enumerate(self.players):
+            try:
+                await ws.send(json.dumps({"type": "ping", "t": time.perf_counter()}))
+            except Exception:
+                pass
 
     async def broadcast(self, msg: dict):
         data = json.dumps(msg)
@@ -81,12 +91,30 @@ class Room:
         if self.state != "draw" or player_idx in self.fires:
             return
 
-        # Use client-reported reaction time for fairness; fall back to
-        # server-measured arrival delta if the client didn't send one.
+        server_delta_ms = (
+            (arrival_time - self.draw_time) * 1000
+            if arrival_time is not None and self.draw_time is not None
+            else None
+        )
+
+        # Anti-cheat: validate client-reported reaction time.
+        if client_time_ms is not None and server_delta_ms is not None:
+            rtt = self.player_rtt.get(player_idx, 300)
+            min_plausible = server_delta_ms - rtt - RTT_TOLERANCE_MS
+            if client_time_ms < MIN_REACTION_MS or client_time_ms < min_plausible:
+                self.state = "done"
+                winner = 1 - player_idx
+                await self.broadcast({
+                    "type": "cheat",
+                    "offender": player_idx,
+                    "winner": winner,
+                })
+                return
+
         if client_time_ms is not None:
             reaction_ms = client_time_ms
-        elif arrival_time is not None and self.draw_time is not None:
-            reaction_ms = (arrival_time - self.draw_time) * 1000
+        elif server_delta_ms is not None:
+            reaction_ms = server_delta_ms
         else:
             reaction_ms = float("inf")
 
@@ -156,6 +184,7 @@ async def handler(websocket):
                 player_idx = 1
                 await websocket.send(json.dumps({"type": "joined", "code": code}))
                 await room.broadcast({"type": "start", "names": room.player_names})
+                asyncio.create_task(room.measure_rtt())
                 asyncio.create_task(room.start_round())
 
             elif t == "fire" and room is not None and player_idx is not None:
@@ -167,6 +196,11 @@ async def handler(websocket):
 
             elif t == "misfire" and room is not None and player_idx is not None:
                 await room.handle_misfire(player_idx)
+
+            elif t == "pong" and room is not None and player_idx is not None:
+                sent_t = msg.get("t")
+                if sent_t is not None:
+                    room.player_rtt[player_idx] = (time.perf_counter() - sent_t) * 1000
 
             elif t == "rematch" and room is not None and player_idx == 0:
                 room.state = "waiting"

@@ -376,7 +376,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
                   best_solo=None, flash: float = 0.0, countdown: int = 3,
                   misfire_player: int | None = None, online_wins=0,
-                  pressed_display=None):
+                  pressed_display=None, cheat_player: int | None = None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -392,7 +392,13 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
-    if misfire_player is not None:
+    if cheat_player is not None:
+        labels = [p1_label, p2_label]
+        pixel_text(surf, f"{labels[cheat_player]} IS CHEATING!",
+                   fonts["med"], LOSE_COL, W // 2, H // 5)
+        pixel_text(surf, f"{labels[1 - cheat_player]} WINS",
+                   fonts["big"], WIN_COL, W // 2, H // 5 + 60)
+    elif misfire_player is not None:
         from game import Mode
         if mode == Mode.SOLO:
             pixel_text(surf, "MISFIRE!", fonts["big"], LOSE_COL, W // 2, H // 5)

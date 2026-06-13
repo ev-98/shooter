@@ -94,6 +94,7 @@ class Session:
         self.settings: Settings = Settings()
         self.prompt_char: str | None = None  # random alphanumeric shown on DRAW (None = LOCAL)
         self.misfire_player: int | None = None
+        self.cheat_player: int | None = None
         self.online_wins: int = 0
         self.pressed_display: list = ["", ""]  # key shown above each player after press
 
@@ -102,6 +103,7 @@ class Session:
         self.winner = None
         self.false_start_player = None
         self.misfire_player = None
+        self.cheat_player = None
         self.draw_time = None
         self.prompt_char = None
         self.pressed_display = ["", ""]
