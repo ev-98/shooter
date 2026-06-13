@@ -140,7 +140,7 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float 
     # Title pops in after a short pause once background is fully revealed
     if intro_fade >= 1.25:
         tcol = DRAW_COL if (tick // 20) % 2 == 0 else WIN_COL
-        pixel_text(surf, "PY NOON", fonts["big"], tcol, W // 2, H // 4)
+        pixel_text(surf, "SHOOTER", fonts["big"], tcol, W // 2, H // 4)
 
     # Help text appears ~1 s after the title and flashes arcade-style
     if intro_fade >= 1.6 and (tick // 30) % 2 == 0:

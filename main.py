@@ -44,7 +44,7 @@ from ui import (
 # ── Constants ─────────────────────────────────────────────────────────────────
 W, H       = 800, 500
 FPS        = 60
-TITLE      = "High Noon Showdown"
+TITLE      = "shooter"
 
 # Relay server — change to a hosted URL for internet play
 RELAY_URL  = "ws://localhost:8765"
