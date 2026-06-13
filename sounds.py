@@ -129,6 +129,7 @@ class SoundManager:
         self.blip    = _load_sfx("blip",    _make_blip)
         self.confirm = _load_sfx("confirm", _make_confirm)
         self.gunshot = _load_sfx("gunshot", _make_gunshot, gain=1.15)
+        self.gunshot.set_volume(0.6)
         self.ping    = _load_sfx("ping",    _make_ping)
 
     # ── SFX ──────────────────────────────────────────────────────────────────

@@ -125,14 +125,36 @@ def pixel_text_left(surf: pygame.Surface, text: str, font: pygame.font.Font,
 
 # ── Screen renderers ──────────────────────────────────────────────────────────
 
-def render_menu(surf: pygame.Surface, fonts: dict, tick: int):
+def render_splash(surf: pygame.Surface, fonts: dict, show_text: bool = False):
+    """Boot splash: black screen, then 'GAME BY EV4' appears."""
+    W, H = surf.get_size()
+    surf.fill((0, 0, 0))
+    if show_text:
+        pixel_text(surf, "GAME BY EV4", fonts["med"], DRAW_COL, W // 2, H // 2)
+
+
+def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float = 1.0):
     draw_bg(surf)
     W, H = surf.get_size()
-    # Title flicker every 40 frames
-    tcol = DRAW_COL if (tick // 20) % 2 == 0 else WIN_COL
-    pixel_text(surf, "PY NOON", fonts["big"], tcol, W // 2, H // 4)
-    pixel_text(surf, "[ PRESS ENTER TO START ]", fonts["med"], TEXT_DIM,
-               W // 2, H // 2 + 20)
+
+    # Title pops in after a short pause once background is fully revealed
+    if intro_fade >= 1.25:
+        tcol = DRAW_COL if (tick // 20) % 2 == 0 else WIN_COL
+        pixel_text(surf, "PY NOON", fonts["big"], tcol, W // 2, H // 4)
+
+    # Help text appears ~1 s after the title and flashes arcade-style
+    if intro_fade >= 1.6 and (tick // 30) % 2 == 0:
+        pixel_text(surf, "[ PRESS ENTER TO START ]", fonts["med"], TEXT_DIM,
+                   W // 2, H // 2 + 20)
+
+    # Stepped black overlay — quantised to 8 levels for 8-bit feel
+    if intro_fade < 1.0:
+        raw = (1.0 - intro_fade) * 255
+        stepped = min(255, round(raw / 32) * 32)
+        overlay = pygame.Surface((W, H))
+        overlay.set_alpha(stepped)
+        overlay.fill((0, 0, 0))
+        surf.blit(overlay, (0, 0))
 
 
 def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):

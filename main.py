@@ -35,6 +35,7 @@ from ui import (
     render_ready,
     render_result,
     render_settings,
+    render_splash,
     render_timeout,
     render_victory,
 )
@@ -533,6 +534,10 @@ def main_v2():
     flash_val         = 0.0
     match_intro_until = 0.0
     result_entered_at: float | None = None
+    intro_fade        = 0.0   # 0 = black, 1 = fully visible; plays once on launch
+    splash_done       = False
+    splash_gun_fired  = False
+    splash_start      = time.perf_counter()
 
     settings_selected  = 0    # cursor in settings screen
     settings_listening = False # waiting for a new key binding
@@ -556,6 +561,11 @@ def main_v2():
 
             elif event.type == pygame.KEYDOWN:
                 k = event.key
+
+                # Any key skips the splash
+                if not splash_done:
+                    splash_done = True
+                    continue
 
                 # Mode select screen takes priority
                 _old_idx = _mode_select_idx
@@ -788,6 +798,16 @@ def main_v2():
                 snd.play_ping()
             prev_state = sess.state
 
+        # Splash screen tick
+        if not splash_done:
+            splash_elapsed = time.perf_counter() - splash_start
+            if splash_elapsed >= 2.0 and not splash_gun_fired:
+                snd.play_gunshot()
+                splash_gun_fired = True
+            if splash_elapsed >= 5.0:
+                splash_done = True
+                snd.start_wind()
+
         # Match intro auto-advance after 2 seconds
         if sess.state == State.MATCH_INTRO:
             if time.perf_counter() >= match_intro_until:
@@ -802,52 +822,58 @@ def main_v2():
                 draw_trigger_ref[0] = reset_draw_timer()
 
         # Render
-        p1l, p2l = player_labels(sess)
-        cursor_on = (cursor_tick // 30) % 2 == 0
+        if not splash_done:
+            splash_elapsed = time.perf_counter() - splash_start
+            render_splash(surf, fonts, show_text=2.0 <= splash_elapsed < 3.0)
+        else:
+            p1l, p2l = player_labels(sess)
+            cursor_on = (cursor_tick // 30) % 2 == 0
+            st = sess.state
+            if st == State.MENU and not _in_mode_select:
+                render_menu(surf, fonts, tick, intro_fade)
+            elif st == State.MENU and _in_mode_select:
+                render_mode_select(surf, fonts, _mode_select_idx)
+            elif st == State.ONLINE_SETUP:
+                ph_disp = {"host_connecting": "host_wait",
+                           "join_connecting": "join_ip",
+                           "join_wait": "join_code"}.get(op, op)
+                ti = join_ip_ref[0] if input_focus == "ip" else join_code_buf
+                render_online_setup(surf, fonts, ph_disp, ti, input_focus,
+                                    sess.online_error, sess.online_code, cursor_on)
+            elif st == State.MATCH_INTRO:
+                render_match_intro(surf, fonts)
+            elif st == State.LOBBY:
+                render_lobby(surf, fonts, tick)
+            elif st == State.READY:
+                render_ready(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
+                             best_solo=sess.best_solo, settings=sess.settings)
+            elif st == State.DRAW:
+                render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
+                            flash_val, best_solo=sess.best_solo, settings=sess.settings)
+            elif st == State.RESULT:
+                if result_entered_at is not None:
+                    _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
+                else:
+                    _cd = 3
+                render_result(surf, fonts, sess.mode, sess.winner,
+                              sess.false_start_player, sess.last_times,
+                              sess.scores, p1l, p2l,
+                              is_online=sess.mode == Mode.ONLINE,
+                              is_host=sess.is_host,
+                              best_solo=sess.best_solo,
+                              flash=flash_val,
+                              countdown=_cd)
+            elif st == State.TIMEOUT:
+                render_timeout(surf, fonts)
+            elif st == State.VICTORY:
+                render_victory(surf, fonts, sess.scores, p1l, p2l,
+                               is_online=sess.mode == Mode.ONLINE)
+            elif st == State.SETTINGS:
+                render_settings(surf, fonts, sess.settings,
+                                settings_selected, settings_listening)
 
-        st = sess.state
-        if st == State.MENU and not _in_mode_select:
-            render_menu(surf, fonts, tick)
-        elif st == State.MENU and _in_mode_select:
-            render_mode_select(surf, fonts, _mode_select_idx)
-        elif st == State.ONLINE_SETUP:
-            ph_disp = {"host_connecting": "host_wait",
-                       "join_connecting": "join_ip",
-                       "join_wait": "join_code"}.get(op, op)
-            ti = join_ip_ref[0] if input_focus == "ip" else join_code_buf
-            render_online_setup(surf, fonts, ph_disp, ti, input_focus,
-                                sess.online_error, sess.online_code, cursor_on)
-        elif st == State.MATCH_INTRO:
-            render_match_intro(surf, fonts)
-        elif st == State.LOBBY:
-            render_lobby(surf, fonts, tick)
-        elif st == State.READY:
-            render_ready(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
-                         best_solo=sess.best_solo, settings=sess.settings)
-        elif st == State.DRAW:
-            render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
-                        flash_val, best_solo=sess.best_solo, settings=sess.settings)
-        elif st == State.RESULT:
-            if result_entered_at is not None:
-                _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
-            else:
-                _cd = 3
-            render_result(surf, fonts, sess.mode, sess.winner,
-                          sess.false_start_player, sess.last_times,
-                          sess.scores, p1l, p2l,
-                          is_online=sess.mode == Mode.ONLINE,
-                          is_host=sess.is_host,
-                          best_solo=sess.best_solo,
-                          flash=flash_val,
-                          countdown=_cd)
-        elif st == State.TIMEOUT:
-            render_timeout(surf, fonts)
-        elif st == State.VICTORY:
-            render_victory(surf, fonts, sess.scores, p1l, p2l,
-                           is_online=sess.mode == Mode.ONLINE)
-        elif st == State.SETTINGS:
-            render_settings(surf, fonts, sess.settings,
-                            settings_selected, settings_listening)
+        if splash_done and intro_fade < 1.6 and tick % 3 == 0:
+            intro_fade = min(1.6, intro_fade + 1 / 60)  # overlay clears at 1.0, title at 1.25, help text at 1.6
 
         pygame.display.flip()
 
