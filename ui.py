@@ -267,23 +267,48 @@ def _label_colour(online_wins: int):
     return DRAW_COL              # default yellow
 
 
-def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins=0):
+def _draw_pressed_key_box(surf, fonts, char, col, cx, cy):
+    """Render a key indicator in the same bordered-box style as the DRAW prompt."""
+    box_w, box_h = 52, 52
+    bx = cx - box_w // 2
+    by = cy - box_h // 2
+    pygame.draw.rect(surf, (60, 40, 10), (bx, by, box_w, box_h), border_radius=5)
+    pygame.draw.rect(surf, col, (bx, by, box_w, box_h), 3, border_radius=5)
+    pixel_text(surf, char, fonts["score"], col, cx, cy)
+
+
+def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H,
+                        online_wins=0, pressed_display=None, misfire_player=None):
     from game import Mode
     horizon = int(H * 0.62)
     ground_y = horizon + 30
     label_y = ground_y - SPRITE_H - 22
+    key_y   = label_y - 40
     # P1 hat sits ~5px left of sprite centre; P2 (mirrored) sits ~5px right
     p1_x = W // 4     - 5
     p2_x = W * 3 // 4 + 5
     col = _label_colour(online_wins)
+
+    def _key_col(player_idx):
+        if misfire_player is not None and misfire_player == player_idx:
+            return LOSE_COL
+        return DRAW_COL
+
     if mode == Mode.SOLO:
         pixel_text(surf, p1_label, fonts["med"], col, p1_x, label_y)
+        if pressed_display and pressed_display[0]:
+            _draw_pressed_key_box(surf, fonts, pressed_display[0], _key_col(0), p1_x, key_y)
     elif mode == Mode.LOCAL:
         pixel_text(surf, "P1", fonts["med"], P1_COL, p1_x, label_y)
         pixel_text(surf, "P2", fonts["med"], P2_COL, p2_x, label_y)
     elif mode == Mode.ONLINE:
         pixel_text(surf, p1_label, fonts["med"], col, p1_x, label_y)
         pixel_text(surf, p2_label, fonts["med"], col, p2_x, label_y)
+        if pressed_display:
+            if pressed_display[0]:
+                _draw_pressed_key_box(surf, fonts, pressed_display[0], _key_col(0), p1_x, key_y)
+            if pressed_display[1]:
+                _draw_pressed_key_box(surf, fonts, pressed_display[1], _key_col(1), p2_x, key_y)
 
 
 def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
@@ -317,7 +342,7 @@ def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
 def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
                 mode, scores: list, p1_label: str, p2_label: str,
                 flash: float = 0.0, best_solo=None, settings=None, prompt_char=None,
-                online_wins=0):
+                online_wins=0, pressed_display=None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -325,7 +350,8 @@ def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
 
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
-    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins,
+                        pressed_display=pressed_display)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
@@ -349,7 +375,8 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
                   best_solo=None, flash: float = 0.0, countdown: int = 3,
-                  misfire_player: int | None = None, online_wins=0):
+                  misfire_player: int | None = None, online_wins=0,
+                  pressed_display=None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -360,7 +387,8 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     p2_fired = winner != 1
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True,  fired=p1_fired)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False, fired=p2_fired)
-    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins,
+                        pressed_display=pressed_display, misfire_player=misfire_player)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 

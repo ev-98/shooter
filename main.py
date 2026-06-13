@@ -678,6 +678,7 @@ def main_v2():
                     ch = event.unicode.upper()
                     if sess.mode == Mode.ONLINE:
                         if ch:  # ignore bare modifier keys
+                            sess.pressed_display[sess.player_idx or 0] = ch
                             if ch == sess.prompt_char:
                                 t_ms = int((time.perf_counter() - sess.draw_time) * 1000) \
                                        if sess.draw_time else 0
@@ -688,6 +689,7 @@ def main_v2():
                                 snd.play_gunshot()
                     elif sess.prompt_char is not None:  # SOLO
                         if ch:
+                            sess.pressed_display[0] = ch
                             if ch == sess.prompt_char:
                                 res = sess.fire(0)
                                 if res == "ok":
@@ -896,7 +898,8 @@ def main_v2():
             elif st == State.DRAW:
                 render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
                             flash_val, best_solo=sess.best_solo, settings=sess.settings,
-                            prompt_char=sess.prompt_char, online_wins=sess.online_wins)
+                            prompt_char=sess.prompt_char, online_wins=sess.online_wins,
+                            pressed_display=sess.pressed_display)
             elif st == State.RESULT:
                 if result_entered_at is not None:
                     _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
@@ -911,7 +914,8 @@ def main_v2():
                               flash=flash_val,
                               countdown=_cd,
                               misfire_player=sess.misfire_player,
-                              online_wins=sess.online_wins)
+                              online_wins=sess.online_wins,
+                              pressed_display=sess.pressed_display)
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:
