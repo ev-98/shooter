@@ -23,6 +23,7 @@ import pygame
 
 from client import NetworkClient
 from game import Mode, Session, Settings, State, WIN_SCORE
+from server import start_background_server
 from sounds import SoundManager
 from ui import (
     make_fonts,
@@ -44,6 +45,9 @@ from ui import (
 W, H       = 800, 500
 FPS        = 60
 TITLE      = "High Noon Showdown"
+
+# Relay server — change to a hosted URL for internet play
+RELAY_URL  = "ws://localhost:8765"
 
 # Solo / local draw timer bounds (seconds)
 DRAW_MIN   = 1.5
@@ -247,8 +251,7 @@ def main():
         # ── Online: handle network messages ───────────────────────────────
         if sess.mode == Mode.ONLINE or online_phase in (
                 "host_connecting", "join_connecting", "host_wait"):
-            _poll_network(net, sess, online_phase, join_code_buf,
-                          join_ip, sess.online_code)
+            _poll_network(net, sess, online_phase, join_code_buf, sess.online_code)
             # Sync back mutated online_phase
             online_phase = _online_phase_sync(
                 net, sess, online_phase, join_code_buf)
@@ -333,8 +336,7 @@ def _start_local_round(sess: Session):
 
 
 def _poll_network(net: NetworkClient, sess: Session,
-                  online_phase: str, join_code_buf: str,
-                  join_ip: str, room_code: str):
+                  online_phase: str, join_code_buf: str, room_code: str):
     """Consume all pending network messages."""
     while True:
         msg = net.poll()
@@ -429,12 +431,11 @@ def _render(surf, fonts, sess: Session, tick: int, flash: float,
         cursor_on = (cursor_tick // 30) % 2 == 0
         phase_map = {
             "host_connecting": "host_wait",
-            "join_connecting": "join_ip",
+            "join_connecting": "join_code",
             "join_wait": "join_code",
         }
         display_phase = phase_map.get(online_phase, online_phase)
-        ti = join_ip if input_focus == "ip" else join_code_buf
-        render_online_setup(surf, fonts, display_phase, ti, input_focus,
+        render_online_setup(surf, fonts, display_phase, join_code_buf,
                             sess.online_error, sess.online_code, cursor_on)
 
     elif st == State.LOBBY:
@@ -461,7 +462,7 @@ def _render(surf, fonts, sess: Session, tick: int, flash: float,
 # ── Mode-select key handler (called from main event loop) ─────────────────────
 
 def handle_mode_select_key(key, sess: Session, net: NetworkClient,
-                           join_ip_ref: list, draw_trigger_ref: list,
+                           draw_trigger_ref: list,
                            online_phase_ref: list) -> bool:
     """
     Returns True if the event was consumed.
@@ -513,6 +514,7 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
 
 def main_v2():
     """Full main loop with mode-select integrated cleanly."""
+    start_background_server()   # embedded relay; silently skips if port busy
     pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.init()
     surf  = pygame.display.set_mode((W, H))
@@ -527,9 +529,7 @@ def main_v2():
 
     draw_trigger_ref  = [None]     # mutable reference trick
     online_phase_ref  = ["choose"]
-    join_ip_ref       = ["127.0.0.1"]
     join_code_buf     = ""
-    input_focus       = "ip"
     cursor_tick       = 0
     flash_val         = 0.0
     match_intro_until = 0.0
@@ -569,7 +569,7 @@ def main_v2():
 
                 # Mode select screen takes priority
                 _old_idx = _mode_select_idx
-                if handle_mode_select_key(k, sess, net, join_ip_ref,
+                if handle_mode_select_key(k, sess, net,
                                           draw_trigger_ref, online_phase_ref):
                     op = online_phase_ref[0]
                     if _mode_select_idx != _old_idx:
@@ -591,55 +591,34 @@ def main_v2():
                     if op == "choose":
                         if k == pygame.K_h:
                             net = NetworkClient()
-                            net.connect(join_ip_ref[0])
+                            net.connect(RELAY_URL)
                             online_phase_ref[0] = "host_connecting"
                             sess.is_host = True
                             sess.player_idx = 0
                         elif k == pygame.K_j:
-                            online_phase_ref[0] = "join_ip"
-                            input_focus = "ip"
+                            online_phase_ref[0] = "join_code"
                             join_code_buf = ""
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
                             _in_mode_select = True
-                    elif op in ("join_ip", "join_code"):
-                        if k == pygame.K_TAB:
-                            input_focus = "code" if input_focus == "ip" else "ip"
-                            online_phase_ref[0] = "join_code" if input_focus == "code" else "join_ip"
-                        elif k in (pygame.K_RETURN, pygame.K_SPACE):
-                            if input_focus == "ip":
-                                input_focus = "code"
-                                online_phase_ref[0] = "join_code"
-                            else:
+                    elif op == "join_code":
+                        if k in (pygame.K_RETURN, pygame.K_SPACE):
+                            if join_code_buf:
                                 net = NetworkClient()
-                                net.connect(join_ip_ref[0])
+                                net.connect(RELAY_URL)
                                 sess.is_host = False
                                 sess.player_idx = 1
                                 online_phase_ref[0] = "join_connecting"
                         elif k == pygame.K_BACKSPACE:
-                            if input_focus == "ip":
-                                join_ip_ref[0] = join_ip_ref[0][:-1]
-                            else:
-                                join_code_buf = join_code_buf[:-1]
+                            join_code_buf = join_code_buf[:-1]
                         elif k == pygame.K_ESCAPE:
                             online_phase_ref[0] = "choose"
                         else:
                             ch = event.unicode
-                            if input_focus == "ip" and ch in "0123456789.":
-                                if len(join_ip_ref[0]) < 21:
-                                    join_ip_ref[0] += ch
-                            elif input_focus == "code" and ch.isalpha():
-                                if len(join_code_buf) < 4:
-                                    join_code_buf += ch.upper()
-                    elif op == "host_connecting":
-                        if k == pygame.K_ESCAPE:
-                            net.close()
-                            online_phase_ref[0] = "choose"
-                    elif op == "host_wait":
-                        if k == pygame.K_ESCAPE:
-                            net.close()
-                            online_phase_ref[0] = "choose"
-                    elif op in ("join_connecting", "join_wait"):
+                            if ch.isalpha() and len(join_code_buf) < 4:
+                                join_code_buf += ch.upper()
+                    elif op in ("host_connecting", "host_wait",
+                                "join_connecting", "join_wait"):
                         if k == pygame.K_ESCAPE:
                             net.close()
                             online_phase_ref[0] = "choose"
@@ -770,8 +749,7 @@ def main_v2():
         # Network polling
         if sess.mode == Mode.ONLINE or op in (
                 "host_connecting", "join_connecting", "join_wait", "host_wait"):
-            _poll_network(net, sess, op, join_code_buf,
-                          join_ip_ref[0], sess.online_code)
+            _poll_network(net, sess, op, join_code_buf, sess.online_code)
             online_phase_ref[0] = _online_phase_sync(
                 net, sess, op, join_code_buf)
             op = online_phase_ref[0]
@@ -835,10 +813,9 @@ def main_v2():
                 render_mode_select(surf, fonts, _mode_select_idx)
             elif st == State.ONLINE_SETUP:
                 ph_disp = {"host_connecting": "host_wait",
-                           "join_connecting": "join_ip",
+                           "join_connecting": "join_code",
                            "join_wait": "join_code"}.get(op, op)
-                ti = join_ip_ref[0] if input_focus == "ip" else join_code_buf
-                render_online_setup(surf, fonts, ph_disp, ti, input_focus,
+                render_online_setup(surf, fonts, ph_disp, join_code_buf,
                                     sess.online_error, sess.online_code, cursor_on)
             elif st == State.MATCH_INTRO:
                 render_match_intro(surf, fonts)

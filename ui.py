@@ -214,13 +214,9 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings,
 
 
 def render_online_setup(surf: pygame.Surface, fonts: dict,
-                        phase: str, text_input: str,
-                        input_focus: str, error: str, code: str,
-                        cursor_on: bool):
-    """
-    phase: 'choose' | 'host_wait' | 'join_ip' | 'join_code'
-    input_focus: 'ip' | 'code'
-    """
+                        phase: str, join_code_buf: str,
+                        error: str, code: str, cursor_on: bool):
+    """phase: 'choose' | 'host_wait' | 'join_code'"""
     draw_bg(surf)
     W, H = surf.get_size()
     pixel_text(surf, "ONLINE DUEL", fonts["med"], DRAW_COL, W // 2, H // 6)
@@ -228,46 +224,27 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
     if phase == "choose":
         pixel_text(surf, "H  HOST A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 20)
         pixel_text(surf, "J  JOIN A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 80)
-        pixel_text(surf, "ESC  back", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "ESC  BACK", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
     elif phase == "host_wait":
         pixel_text(surf, "YOUR ROOM CODE", fonts["med"], TEXT_DIM, W // 2, H // 3)
-        pixel_text(surf, code, fonts["big"], DRAW_COL, W // 2, H // 3 + 60)
+        pixel_text(surf, code if code else "...", fonts["big"], DRAW_COL, W // 2, H // 3 + 60)
         pixel_text(surf, "SHARE THIS CODE WITH YOUR OPPONENT",
                    fonts["small"], TEXT_DIM, W // 2, H // 3 + 110)
         pixel_text(surf, "WAITING FOR OPPONENT...", fonts["small"], TEXT_WARM,
                    W // 2, H * 2 // 3)
-        pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "ESC  CANCEL", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
-    elif phase in ("join_ip", "join_code"):
-        # IP field
-        ip_col = DRAW_COL if input_focus == "ip" else TEXT_DIM
-        pygame.draw.rect(surf, INPUT_COL, (W // 2 - 180, H // 3 - 10, 360, 40),
-                         border_radius=3)
-        if input_focus == "ip":
-            pygame.draw.rect(surf, DRAW_COL, (W // 2 - 180, H // 3 - 10, 360, 40),
-                             2, border_radius=3)
-        ip_str = text_input if input_focus == "ip" else (text_input or "SERVER IP")
-        cursor = "|" if (input_focus == "ip" and cursor_on) else ""
-        pixel_text(surf, ip_str + cursor, fonts["med"], ip_col,
-                   W // 2, H // 3 + 10)
-        pixel_text(surf, "SERVER IP (SPACE TO CONFIRM)",
-                   fonts["small"], TEXT_DIM, W // 2, H // 3 - 20)
-
-        # Code field
-        code_col = DRAW_COL if input_focus == "code" else TEXT_DIM
-        pygame.draw.rect(surf, INPUT_COL, (W // 2 - 100, H // 2, 200, 40),
-                         border_radius=3)
-        if input_focus == "code":
-            pygame.draw.rect(surf, DRAW_COL, (W // 2 - 100, H // 2, 200, 40),
-                             2, border_radius=3)
-        code_str = text_input if input_focus == "code" else ""
-        cursor2 = "|" if (input_focus == "code" and cursor_on) else ""
-        pixel_text(surf, code_str + cursor2, fonts["med"], code_col,
-                   W // 2, H // 2 + 20)
-        pixel_text(surf, "ROOM CODE", fonts["small"], TEXT_DIM, W // 2, H // 2 - 14)
-
-        pixel_text(surf, "TAB SWITCH FIELD   SPACE CONNECT   ESC BACK",
+    elif phase == "join_code":
+        pixel_text(surf, "ENTER ROOM CODE", fonts["med"], TEXT_DIM, W // 2, H // 3)
+        pygame.draw.rect(surf, INPUT_COL, (W // 2 - 120, H // 2 - 10, 240, 48),
+                         border_radius=4)
+        pygame.draw.rect(surf, DRAW_COL, (W // 2 - 120, H // 2 - 10, 240, 48),
+                         2, border_radius=4)
+        cursor = "|" if cursor_on else ""
+        pixel_text(surf, join_code_buf + cursor, fonts["big"], DRAW_COL,
+                   W // 2, H // 2 + 14)
+        pixel_text(surf, "SPACE TO CONNECT   ESC BACK",
                    fonts["small"], TEXT_DIM, W // 2, H - 40)
 
     if error:

@@ -1,8 +1,14 @@
-"""WebSocket client running in a background thread with its own asyncio loop."""
+"""WebSocket client — background thread with its own asyncio loop.
+
+Records the moment each DRAW signal arrives and automatically injects
+client_time_ms into fire messages so the server can compare true reaction
+times rather than packet-arrival order.
+"""
 import asyncio
 import json
 import queue
 import threading
+import time
 
 import websockets
 
@@ -15,20 +21,25 @@ class NetworkClient:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._ws = None
         self._out_queue: asyncio.Queue | None = None
+        self._draw_receive_time: float | None = None
 
-    def connect(self, host: str, port: int = 8765):
+    def connect(self, url: str = "ws://localhost:8765"):
+        """Connect to relay server. Accepts full ws:// URL or bare host string."""
+        if not url.startswith("ws://") and not url.startswith("wss://"):
+            url = f"ws://{url}:8765"
+        self._url = url
+        self._draw_receive_time = None
         self._loop = asyncio.new_event_loop()
-        t = threading.Thread(target=self._run, args=(host, port), daemon=True)
+        t = threading.Thread(target=self._run, daemon=True)
         t.start()
 
-    def _run(self, host: str, port: int):
+    def _run(self):
         asyncio.set_event_loop(self._loop)
-        self._loop.run_until_complete(self._main(host, port))
+        self._loop.run_until_complete(self._main())
 
-    async def _main(self, host: str, port: int):
-        uri = f"ws://{host}:{port}"
+    async def _main(self):
         try:
-            async with websockets.connect(uri, open_timeout=5) as ws:
+            async with websockets.connect(self._url, open_timeout=5) as ws:
                 self._ws = ws
                 self._out_queue = asyncio.Queue()
                 self.connected = True
@@ -39,7 +50,10 @@ class NetworkClient:
 
     async def _recv_loop(self):
         async for raw in self._ws:
-            self.incoming.put(json.loads(raw))
+            msg = json.loads(raw)
+            if msg.get("type") == "draw":
+                self._draw_receive_time = time.perf_counter()
+            self.incoming.put(msg)
 
     async def _send_loop(self):
         while True:
@@ -49,6 +63,12 @@ class NetworkClient:
             await self._ws.send(json.dumps(msg))
 
     def send(self, msg: dict):
+        # Automatically stamp fire events with the local reaction time so
+        # the server can pick the winner by true reaction speed.
+        if msg.get("type") == "fire" and self._draw_receive_time is not None:
+            msg = {**msg, "client_time_ms": round(
+                (time.perf_counter() - self._draw_receive_time) * 1000
+            )}
         if self._loop and self._out_queue is not None:
             asyncio.run_coroutine_threadsafe(self._out_queue.put(msg), self._loop)
 

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
-Run this on any machine accessible to both players:
-    python server.py
+WebSocket relay server for High Noon Showdown.
+
+Standalone:  python server.py
+Embedded:    from server import start_background_server; start_background_server()
 Default port: 8765
 """
 import asyncio
 import json
 import random
 import string
+import threading
 import time
+
 import websockets
 
 rooms: dict = {}
@@ -22,9 +26,10 @@ def gen_code() -> str:
 class Room:
     def __init__(self, code: str):
         self.code = code
-        self.players: list = []      # websocket objects
-        self.state = "waiting"       # waiting | ready | draw | done
-        self.fires: dict = {}        # {player_idx: perf_counter time}
+        self.players: list = []
+        self.state = "waiting"
+        # fires stores {player_idx: reaction_ms} — client-reported for fairness
+        self.fires: dict = {}
         self.draw_time: float | None = None
         self._resolve_task = None
 
@@ -57,9 +62,9 @@ class Room:
             self.state = "timeout"
             await self.broadcast({"type": "timeout"})
 
-    async def handle_fire(self, player_idx: int):
-        t = time.perf_counter()
-
+    async def handle_fire(self, player_idx: int,
+                          client_time_ms: float | None = None,
+                          arrival_time: float | None = None):
         if self.state == "ready":
             self.state = "false_start"
             winner = 1 - player_idx
@@ -73,11 +78,21 @@ class Room:
         if self.state != "draw" or player_idx in self.fires:
             return
 
-        self.fires[player_idx] = t
+        # Use client-reported reaction time for fairness; fall back to
+        # server-measured arrival delta if the client didn't send one.
+        if client_time_ms is not None:
+            reaction_ms = client_time_ms
+        elif arrival_time is not None and self.draw_time is not None:
+            reaction_ms = (arrival_time - self.draw_time) * 1000
+        else:
+            reaction_ms = float("inf")
+
+        self.fires[player_idx] = reaction_ms
 
         if len(self.fires) >= len(self.players):
             await self._resolve()
         elif self._resolve_task is None:
+            # Grace window: wait up to 300 ms for the other player's shot
             self._resolve_task = asyncio.create_task(self._delayed_resolve())
 
     async def _delayed_resolve(self):
@@ -92,10 +107,7 @@ class Room:
         if self._resolve_task:
             self._resolve_task.cancel()
         winner = min(self.fires, key=self.fires.get)
-        times = {
-            str(k): int((v - self.draw_time) * 1000)
-            for k, v in self.fires.items()
-        }
+        times = {str(k): round(v) for k, v in self.fires.items()}
         await self.broadcast({"type": "result", "winner": winner, "times": times})
 
 
@@ -131,7 +143,11 @@ async def handler(websocket):
                 asyncio.create_task(room.start_round())
 
             elif t == "fire" and room is not None and player_idx is not None:
-                await room.handle_fire(player_idx)
+                await room.handle_fire(
+                    player_idx,
+                    client_time_ms=msg.get("client_time_ms"),
+                    arrival_time=time.perf_counter(),
+                )
 
             elif t == "rematch" and room is not None and player_idx == 0:
                 room.state = "waiting"
@@ -146,7 +162,26 @@ async def handler(websocket):
                 await room.broadcast({"type": "opponent_left"})
 
 
-async def main():
+def start_background_server(port: int = 8765):
+    """Start the relay server in a daemon thread. Safe to call multiple times."""
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _serve():
+            try:
+                async with websockets.serve(handler, "0.0.0.0", port):
+                    await asyncio.Future()
+            except OSError:
+                pass  # port already in use — external relay is handling it
+
+        loop.run_until_complete(_serve())
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+
+async def _main():
     host, port = "0.0.0.0", 8765
     print(f"Shootout server listening on ws://{host}:{port}")
     async with websockets.serve(handler, host, port):
@@ -154,4 +189,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(_main())
