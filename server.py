@@ -17,8 +17,10 @@ import websockets
 
 rooms: dict = {}
 
-MIN_REACTION_MS  = 80   # below this is physically impossible for a human
-RTT_TOLERANCE_MS = 50   # extra buffer for clock drift / jitter
+MIN_REACTION_MS   = 80   # below this is physically impossible for a human
+RTT_TOLERANCE_MS  = 50   # extra buffer for clock drift / jitter
+N_RTT_SAMPLES     = 5    # pings per player; minimum of all samples is used
+RTT_PING_INTERVAL = 0.1  # seconds between pings
 
 
 def gen_code() -> str:
@@ -36,14 +38,17 @@ class Room:
         self._resolve_task = None
         self.prompt_key: str | None = None
         self.player_names: dict = {}
-        self.player_rtt: dict = {}  # {player_idx: rtt_ms}
+        self.player_rtt: dict = {}         # {player_idx: min rtt_ms so far}
+        self.player_rtt_samples: dict = {} # {player_idx: [rtt_ms, ...]}
 
     async def measure_rtt(self):
-        for idx, ws in enumerate(self.players):
-            try:
-                await ws.send(json.dumps({"type": "ping", "t": time.perf_counter()}))
-            except Exception:
-                pass
+        for _ in range(N_RTT_SAMPLES):
+            for ws in self.players:
+                try:
+                    await ws.send(json.dumps({"type": "ping", "t": time.perf_counter()}))
+                except Exception:
+                    pass
+            await asyncio.sleep(RTT_PING_INTERVAL)
 
     async def broadcast(self, msg: dict):
         data = json.dumps(msg)
@@ -200,7 +205,10 @@ async def handler(websocket):
             elif t == "pong" and room is not None and player_idx is not None:
                 sent_t = msg.get("t")
                 if sent_t is not None:
-                    room.player_rtt[player_idx] = (time.perf_counter() - sent_t) * 1000
+                    rtt_ms = (time.perf_counter() - sent_t) * 1000
+                    samples = room.player_rtt_samples.setdefault(player_idx, [])
+                    samples.append(rtt_ms)
+                    room.player_rtt[player_idx] = min(samples)
 
             elif t == "rematch" and room is not None and player_idx == 0:
                 room.state = "waiting"
