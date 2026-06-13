@@ -1,8 +1,26 @@
 """Core game state — no pygame dependency."""
+import json
+import os
 import random
 import string
 import time
 from enum import Enum, auto
+
+SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
+
+def load_save() -> dict:
+    try:
+        with open(SAVE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_save(data: dict):
+    try:
+        with open(SAVE_PATH, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
 
 
 class Mode(Enum):
@@ -24,6 +42,7 @@ class State(Enum):
     RESULT = auto()         # round over, show winner
     TIMEOUT = auto()        # nobody fired in time
     SETTINGS = auto()       # settings screen
+    DATA = auto()           # stats / data viewer
     VICTORY = auto()        # match over — someone reached WIN_SCORE
     MATCH_INTRO = auto()    # brief "first to N" splash before first round
 
@@ -59,6 +78,7 @@ class Session:
         self.settings: Settings = Settings()
         self.prompt_char: str | None = None  # random alphanumeric shown on DRAW (None = LOCAL)
         self.misfire_player: int | None = None
+        self.online_wins: int = 0
 
     def reset_round(self):
         self.last_times = {}

@@ -191,6 +191,7 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings,
         ("NAME",  name_display),
         ("SOUND", "ON" if settings.sound_on else "OFF"),
         ("MUSIC", "ON" if settings.music_on else "OFF"),
+        ("DATA",  ">"),
     ]
 
     for i, (label, value) in enumerate(items):
@@ -256,7 +257,17 @@ def render_lobby(surf: pygame.Surface, fonts: dict, tick: int):
     pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
-def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H):
+def _label_colour(online_wins: int):
+    if online_wins >= 200:
+        return (255,   0, 255)   # magenta at 200+
+    if online_wins >= 100:
+        return (  0, 255, 255)   # cyan at 100+
+    if online_wins >= 50:
+        return (  0, 255,   0)   # green at 50+
+    return DRAW_COL              # default yellow
+
+
+def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins=0):
     from game import Mode
     horizon = int(H * 0.62)
     ground_y = horizon + 30
@@ -264,19 +275,20 @@ def _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H):
     # P1 hat sits ~5px left of sprite centre; P2 (mirrored) sits ~5px right
     p1_x = W // 4     - 5
     p2_x = W * 3 // 4 + 5
+    col = _label_colour(online_wins)
     if mode == Mode.SOLO:
-        pixel_text(surf, p1_label, fonts["med"], DRAW_COL, p1_x, label_y)
+        pixel_text(surf, p1_label, fonts["med"], col, p1_x, label_y)
     elif mode == Mode.LOCAL:
         pixel_text(surf, "P1", fonts["med"], P1_COL, p1_x, label_y)
         pixel_text(surf, "P2", fonts["med"], P2_COL, p2_x, label_y)
     elif mode == Mode.ONLINE:
-        pixel_text(surf, p1_label, fonts["med"], DRAW_COL, p1_x, label_y)
-        pixel_text(surf, p2_label, fonts["med"], DRAW_COL, p2_x, label_y)
+        pixel_text(surf, p1_label, fonts["med"], col, p1_x, label_y)
+        pixel_text(surf, p2_label, fonts["med"], col, p2_x, label_y)
 
 
 def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
                  mode, scores: list, p1_label: str, p2_label: str,
-                 best_solo=None, settings=None):
+                 best_solo=None, settings=None, online_wins=0):
     draw_bg(surf)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -285,7 +297,7 @@ def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
     # Cowboys in stance
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
-    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins)
 
     # Scores
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
@@ -304,7 +316,8 @@ def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
 
 def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
                 mode, scores: list, p1_label: str, p2_label: str,
-                flash: float = 0.0, best_solo=None, settings=None, prompt_char=None):
+                flash: float = 0.0, best_solo=None, settings=None, prompt_char=None,
+                online_wins=0):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -312,7 +325,7 @@ def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
 
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
-    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
@@ -336,7 +349,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
                   best_solo=None, flash: float = 0.0, countdown: int = 3,
-                  misfire_player: int | None = None):
+                  misfire_player: int | None = None, online_wins=0):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -347,7 +360,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     p2_fired = winner != 1
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True,  fired=p1_fired)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False, fired=p2_fired)
-    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H)
+    _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins)
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
@@ -491,6 +504,30 @@ def _draw_key_hints(surf, fonts, mode, W, H, settings=None, prompt_char=None):
         solo_name = pygame.key.name(settings.solo_key).upper() if settings else "SPACE"
         pixel_text(surf, f"[{solo_name}]  FIRE",
                    fonts["hint"], TEXT_DIM, W // 2, H - 30)
+
+
+def render_data(surf: pygame.Surface, fonts: dict,
+                best_solo, online_wins: int, time_played: float):
+    draw_bg(surf)
+    W, H = surf.get_size()
+    pixel_text(surf, "DATA", fonts["med"], DRAW_COL, W // 2, H // 6)
+
+    s = int(time_played)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    time_str = f"{h}h {m:02d}m {sec:02d}s" if h > 0 else f"{m}m {sec:02d}s"
+
+    rows = [
+        ("SOLO BEST",   f"{best_solo} ms" if best_solo is not None else "--"),
+        ("ONLINE WINS", str(online_wins)),
+        ("TIME PLAYED", time_str),
+    ]
+    for i, (label, value) in enumerate(rows):
+        cy = H // 3 + i * 52
+        pixel_text(surf, label, fonts["med"], TEXT_DIM,  W // 2 - 80, cy)
+        pixel_text(surf, value, fonts["med"], TEXT_WARM, W // 2 + 90, cy)
+
+    pixel_text(surf, "ESC   BACK", fonts["hint"], TEXT_DIM, W // 2, H - 40)
 
 
 def make_fonts() -> dict:

@@ -22,11 +22,12 @@ import time
 import pygame
 
 from client import NetworkClient
-from game import Mode, Session, Settings, State, WIN_SCORE
+from game import Mode, Session, Settings, State, WIN_SCORE, load_save, write_save
 from server import start_background_server
 from sounds import SoundManager
 from ui import (
     make_fonts,
+    render_data,
     render_draw,
     render_lobby,
     render_match_intro,
@@ -541,6 +542,16 @@ def main_v2():
 
     sess   = Session()
     net    = NetworkClient()
+
+    _save = load_save()
+    sess.settings.player_name = _save.get("player_name", "PLAYER")
+    sess.settings.sound_on    = _save.get("sound_on", True)
+    sess.settings.music_on    = _save.get("music_on", True)
+    sess.best_solo            = _save.get("best_solo", None)
+    sess.online_wins          = _save.get("online_wins", 0)
+    time_played_total         = float(_save.get("time_played", 0.0))
+    session_start             = time.perf_counter()
+
     snd    = SoundManager(sess.settings)
     tick   = 0
 
@@ -750,10 +761,10 @@ def main_v2():
                                 sess.settings.player_name += ch
                     else:
                         if k in (pygame.K_UP, pygame.K_w):
-                            settings_selected = (settings_selected - 1) % 3
+                            settings_selected = (settings_selected - 1) % 4
                             snd.play_blip()
                         elif k in (pygame.K_DOWN, pygame.K_s):
-                            settings_selected = (settings_selected + 1) % 3
+                            settings_selected = (settings_selected + 1) % 4
                             snd.play_blip()
                         elif k in (pygame.K_RETURN, pygame.K_SPACE):
                             snd.play_confirm()
@@ -764,9 +775,17 @@ def main_v2():
                             elif settings_selected == 2:
                                 sess.settings.music_on = not sess.settings.music_on
                                 snd.on_music_toggle()
+                            elif settings_selected == 3:
+                                sess.state = State.DATA
+                                name_editing = False
                         elif k == pygame.K_ESCAPE:
                             sess.state = State.MENU
                             _in_mode_select = True
+
+                # Data screen
+                elif sess.state == State.DATA:
+                    if k == pygame.K_ESCAPE:
+                        sess.state = State.SETTINGS
 
         op = online_phase_ref[0]
 
@@ -805,6 +824,10 @@ def main_v2():
         flash_val = max(0.0, flash_val - 0.04)
 
         if sess.state != prev_state:
+            if sess.state == State.VICTORY and sess.mode == Mode.ONLINE:
+                my = sess.player_idx or 0
+                if sess.scores[my] > sess.scores[1 - my]:
+                    sess.online_wins += 1
             if sess.state == State.RESULT and sess.mode == Mode.LOCAL:
                 result_entered_at = time.perf_counter()
             elif sess.state != State.RESULT:
@@ -868,11 +891,12 @@ def main_v2():
                 render_lobby(surf, fonts, tick)
             elif st == State.READY:
                 render_ready(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
-                             best_solo=sess.best_solo, settings=sess.settings)
+                             best_solo=sess.best_solo, settings=sess.settings,
+                             online_wins=sess.online_wins)
             elif st == State.DRAW:
                 render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
                             flash_val, best_solo=sess.best_solo, settings=sess.settings,
-                            prompt_char=sess.prompt_char)
+                            prompt_char=sess.prompt_char, online_wins=sess.online_wins)
             elif st == State.RESULT:
                 if result_entered_at is not None:
                     _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
@@ -886,7 +910,8 @@ def main_v2():
                               best_solo=sess.best_solo,
                               flash=flash_val,
                               countdown=_cd,
-                              misfire_player=sess.misfire_player)
+                              misfire_player=sess.misfire_player,
+                              online_wins=sess.online_wins)
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:
@@ -894,12 +919,23 @@ def main_v2():
                                is_online=sess.mode == Mode.ONLINE)
             elif st == State.SETTINGS:
                 render_settings(surf, fonts, sess.settings, settings_selected, name_editing)
+            elif st == State.DATA:
+                render_data(surf, fonts, sess.best_solo, sess.online_wins,
+                            time_played_total + (time.perf_counter() - session_start))
 
         if splash_done and intro_fade < 1.6 and tick % 3 == 0:
             intro_fade = min(1.6, intro_fade + 1 / 60)  # overlay clears at 1.0, title at 1.25, help text at 1.6
 
         pygame.display.flip()
 
+    write_save({
+        "player_name": sess.settings.player_name,
+        "sound_on":    sess.settings.sound_on,
+        "music_on":    sess.settings.music_on,
+        "best_solo":   sess.best_solo,
+        "online_wins": sess.online_wins,
+        "time_played": time_played_total + (time.perf_counter() - session_start),
+    })
     net.close()
     pygame.quit()
     sys.exit()
