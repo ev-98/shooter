@@ -144,7 +144,7 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float 
 
     # Help text appears ~1 s after the title and flashes arcade-style
     if intro_fade >= 1.6 and (tick // 30) % 2 == 0:
-        pixel_text(surf, "[ PRESS ENTER TO START ]", fonts["med"], TEXT_DIM,
+        pixel_text(surf, "[ PRESS SPACE TO START ]", fonts["med"], TEXT_DIM,
                    W // 2, H // 2 + 20)
 
     # Stepped black overlay — quantised to 8 levels for 8-bit feel
@@ -162,10 +162,10 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
     W, H = surf.get_size()
     pixel_text(surf, "SELECT MODE", fonts["med"], TEXT_WARM, W // 2, H // 5)
     options = [
-        ("1  SOLO   PRACTICE", "beat your best reaction time"),
-        ("2  LOCAL  DUEL", "same keyboard, two cowboys"),
-        ("3  ONLINE DUEL", "connect with a friend via code"),
-        ("4  SETTINGS", "configure controls, sound & music"),
+        ("1  SOLO   PRACTICE", "BEAT YOUR BEST REACTION TIME"),
+        ("2  LOCAL  DUEL", "SAME KEYBOARD, TWO COWBOYS"),
+        ("3  ONLINE DUEL", "CONNECT WITH A FRIEND VIA CODE"),
+        ("4  SETTINGS", "CONFIGURE CONTROLS, SOUND & MUSIC"),
     ]
     for i, (label, sub) in enumerate(options):
         cy = H // 3 + i * 72
@@ -174,7 +174,7 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
             pygame.draw.rect(surf, (60, 40, 10),
                              (W // 2 - 200, cy - 22, 400, 44), border_radius=4)
         pixel_text(surf, label, fonts["med"], col, W // 2, cy)
-    pixel_text(surf, "UP / DOWN  to choose   ENTER to confirm",
+    pixel_text(surf, "UP / DOWN  TO CHOOSE   SPACE TO CONFIRM",
                fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
@@ -208,8 +208,8 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings,
         pixel_text(surf, label, fonts["med"], col, W // 2 - 80, cy)
         pixel_text(surf, value, fonts["med"], col, W // 2 + 90, cy)
 
-    hint = "ENTER to listen for key   ESC cancel" if listening else \
-           "UP/DOWN select   ENTER change   ESC back"
+    hint = "SPACE TO LISTEN FOR KEY   ESC CANCEL" if listening else \
+           "UP/DOWN SELECT   SPACE CHANGE   ESC BACK"
     pixel_text(surf, hint, fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
@@ -226,16 +226,16 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
     pixel_text(surf, "ONLINE DUEL", fonts["med"], DRAW_COL, W // 2, H // 6)
 
     if phase == "choose":
-        pixel_text(surf, "H  HOST a room", fonts["med"], TEXT_WARM, W // 2, H // 3 + 20)
-        pixel_text(surf, "J  JOIN a room", fonts["med"], TEXT_WARM, W // 2, H // 3 + 80)
+        pixel_text(surf, "H  HOST A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 20)
+        pixel_text(surf, "J  JOIN A ROOM", fonts["med"], TEXT_WARM, W // 2, H // 3 + 80)
         pixel_text(surf, "ESC  back", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
     elif phase == "host_wait":
         pixel_text(surf, "YOUR ROOM CODE", fonts["med"], TEXT_DIM, W // 2, H // 3)
         pixel_text(surf, code, fonts["big"], DRAW_COL, W // 2, H // 3 + 60)
-        pixel_text(surf, "Share this code with your opponent",
+        pixel_text(surf, "SHARE THIS CODE WITH YOUR OPPONENT",
                    fonts["small"], TEXT_DIM, W // 2, H // 3 + 110)
-        pixel_text(surf, "Waiting for opponent...", fonts["small"], TEXT_WARM,
+        pixel_text(surf, "WAITING FOR OPPONENT...", fonts["small"], TEXT_WARM,
                    W // 2, H * 2 // 3)
         pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
@@ -247,11 +247,11 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
         if input_focus == "ip":
             pygame.draw.rect(surf, DRAW_COL, (W // 2 - 180, H // 3 - 10, 360, 40),
                              2, border_radius=3)
-        ip_str = text_input if input_focus == "ip" else (text_input or "server IP")
+        ip_str = text_input if input_focus == "ip" else (text_input or "SERVER IP")
         cursor = "|" if (input_focus == "ip" and cursor_on) else ""
         pixel_text(surf, ip_str + cursor, fonts["med"], ip_col,
                    W // 2, H // 3 + 10)
-        pixel_text(surf, "Server IP (enter to confirm)",
+        pixel_text(surf, "SERVER IP (SPACE TO CONFIRM)",
                    fonts["small"], TEXT_DIM, W // 2, H // 3 - 20)
 
         # Code field
@@ -265,9 +265,9 @@ def render_online_setup(surf: pygame.Surface, fonts: dict,
         cursor2 = "|" if (input_focus == "code" and cursor_on) else ""
         pixel_text(surf, code_str + cursor2, fonts["med"], code_col,
                    W // 2, H // 2 + 20)
-        pixel_text(surf, "Room code", fonts["small"], TEXT_DIM, W // 2, H // 2 - 14)
+        pixel_text(surf, "ROOM CODE", fonts["small"], TEXT_DIM, W // 2, H // 2 - 14)
 
-        pixel_text(surf, "TAB switch field   ENTER connect   ESC back",
+        pixel_text(surf, "TAB SWITCH FIELD   SPACE CONNECT   ESC BACK",
                    fonts["small"], TEXT_DIM, W // 2, H - 40)
 
     if error:
@@ -278,7 +278,7 @@ def render_lobby(surf: pygame.Surface, fonts: dict, tick: int):
     draw_bg(surf)
     W, H = surf.get_size()
     dots = "." * ((tick // 20) % 4)
-    pixel_text(surf, f"Waiting for opponent{dots}",
+    pixel_text(surf, f"WAITING FOR OPPONENT{dots}",
                fonts["med"], TEXT_WARM, W // 2, H // 2)
     pixel_text(surf, "ESC  cancel", fonts["small"], TEXT_DIM, W // 2, H - 40)
 
@@ -383,7 +383,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
             pixel_text(surf, "R  rematch     ESC  quit",
                        fonts["small"], TEXT_DIM, W // 2, H - 40)
         else:
-            pixel_text(surf, "Waiting for host...    ESC  quit",
+            pixel_text(surf, "WAITING FOR HOST...    ESC  QUIT",
                        fonts["small"], TEXT_DIM, W // 2, H - 40)
     else:
         from game import Mode as _Mode

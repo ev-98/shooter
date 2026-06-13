@@ -482,7 +482,7 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
         _in_mode_select = False
         sess.state = State.MENU
         return True
-    if key == pygame.K_RETURN:
+    if key in (pygame.K_RETURN, pygame.K_SPACE):
         _in_mode_select = False
         if _mode_select_idx == 0:       # SOLO
             sess.mode = Mode.SOLO
@@ -574,13 +574,13 @@ def main_v2():
                     op = online_phase_ref[0]
                     if _mode_select_idx != _old_idx:
                         snd.play_blip()
-                    elif k == pygame.K_RETURN:
+                    elif k == pygame.K_SPACE:
                         snd.play_confirm()
                     continue
 
                 # Main menu
                 if sess.state == State.MENU and not _in_mode_select:
-                    if k == pygame.K_RETURN:
+                    if k == pygame.K_SPACE:
                         _in_mode_select = True
                         _mode_select_idx = 0
                         snd.play_confirm()
@@ -606,7 +606,7 @@ def main_v2():
                         if k == pygame.K_TAB:
                             input_focus = "code" if input_focus == "ip" else "ip"
                             online_phase_ref[0] = "join_code" if input_focus == "code" else "join_ip"
-                        elif k == pygame.K_RETURN:
+                        elif k in (pygame.K_RETURN, pygame.K_SPACE):
                             if input_focus == "ip":
                                 input_focus = "code"
                                 online_phase_ref[0] = "join_code"
