@@ -178,21 +178,14 @@ def render_mode_select(surf: pygame.Surface, fonts: dict, selected: int):
                fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
-def render_settings(surf: pygame.Surface, fonts: dict, settings,
-                    selected: int, listening: bool):
+def render_settings(surf: pygame.Surface, fonts: dict, settings, selected: int):
     draw_bg(surf)
     W, H = surf.get_size()
     pixel_text(surf, "SETTINGS", fonts["med"], DRAW_COL, W // 2, H // 6)
 
-    solo_name  = pygame.key.name(settings.solo_key).upper()
-    p1_name    = pygame.key.name(settings.p1_key).upper()
-    p2_name    = pygame.key.name(settings.p2_key).upper()
     items = [
-        ("SOLO FIRE",  solo_name),
-        ("P1 FIRE",    p1_name),
-        ("P2 FIRE",    p2_name),
-        ("SOUND",      "ON" if settings.sound_on else "OFF"),
-        ("MUSIC",      "ON" if settings.music_on else "OFF"),
+        ("SOUND", "ON" if settings.sound_on else "OFF"),
+        ("MUSIC", "ON" if settings.music_on else "OFF"),
     ]
 
     for i, (label, value) in enumerate(items):
@@ -201,16 +194,11 @@ def render_settings(surf: pygame.Surface, fonts: dict, settings,
         if i == selected:
             pygame.draw.rect(surf, (60, 40, 10),
                              (W // 2 - 210, cy - 20, 420, 40), border_radius=4)
-            if listening and i < 3:
-                value = "[ PRESS KEY ]"
-                col = DRAW_COL
-        # label left-of-centre, value right-of-centre
         pixel_text(surf, label, fonts["med"], col, W // 2 - 80, cy)
         pixel_text(surf, value, fonts["med"], col, W // 2 + 90, cy)
 
-    hint = "SPACE TO LISTEN FOR KEY   ESC CANCEL" if listening else \
-           "UP/DOWN SELECT   SPACE CHANGE   ESC BACK"
-    pixel_text(surf, hint, fonts["small"], TEXT_DIM, W // 2, H - 40)
+    pixel_text(surf, "UP/DOWN SELECT   SPACE CHANGE   ESC BACK",
+               fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
 def render_online_setup(surf: pygame.Surface, fonts: dict,
@@ -280,14 +268,16 @@ def render_ready(surf: pygame.Surface, fonts: dict, tick: int,
     dots = " . " * n
     pixel_text(surf, dots or "...", fonts["med"], TEXT_DIM, W // 2, H // 8)
 
-    pixel_text(surf, "HAND ON YOUR IRON...", fonts["small"], TEXT_DIM,
-               W // 2, H - 50)
-    _draw_key_hints(surf, fonts, mode, W, H, settings)
+    pixel_text(surf, "HAND ON YOUR IRON...", fonts["hint"], TEXT_DIM,
+               W // 2, H - 62)
+    from game import Mode as _Mode
+    if mode == _Mode.LOCAL:
+        _draw_key_hints(surf, fonts, mode, W, H, settings)
 
 
 def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
                 mode, scores: list, p1_label: str, p2_label: str,
-                flash: float = 0.0, best_solo=None, settings=None):
+                flash: float = 0.0, best_solo=None, settings=None, prompt_char=None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -302,14 +292,23 @@ def render_draw(surf: pygame.Surface, fonts: dict, tick: int,
     scale_offset = math.sin(tick * 0.3) * 4
     _ = scale_offset  # reserved for future surface scaling
     pixel_text(surf, "D R A W !", fonts["big"], DRAW_COL, W // 2, H // 5)
-    _draw_key_hints(surf, fonts, mode, W, H, settings)
+
+    if prompt_char is not None:
+        box_w, box_h = 90, 90
+        bx, by = W // 2 - box_w // 2, H // 2 - box_h // 2 - 10
+        pygame.draw.rect(surf, (60, 40, 10), (bx, by, box_w, box_h), border_radius=6)
+        pygame.draw.rect(surf, DRAW_COL, (bx, by, box_w, box_h), 3, border_radius=6)
+        pixel_text(surf, prompt_char, fonts["big"], DRAW_COL, W // 2, by + box_h // 2)
+
+    _draw_key_hints(surf, fonts, mode, W, H, settings, prompt_char)
 
 
 def render_result(surf: pygame.Surface, fonts: dict, mode,
                   winner: int | None, false_start_player: int | None,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
-                  best_solo=None, flash: float = 0.0, countdown: int = 3):
+                  best_solo=None, flash: float = 0.0, countdown: int = 3,
+                  misfire_player: int | None = None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -323,7 +322,18 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
 
     _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H, best_solo)
 
-    if false_start_player is not None:
+    if misfire_player is not None:
+        from game import Mode
+        if mode == Mode.SOLO:
+            pixel_text(surf, "MISFIRE!", fonts["big"], LOSE_COL, W // 2, H // 5)
+            pixel_text(surf, "WRONG KEY", fonts["med"], TEXT_DIM, W // 2, H // 5 + 60)
+        else:
+            labels = [p1_label, p2_label]
+            pixel_text(surf, f"{labels[misfire_player]} MISFIRED!",
+                       fonts["med"], LOSE_COL, W // 2, H // 5)
+            pixel_text(surf, f"{labels[1 - misfire_player]} WINS",
+                       fonts["big"], WIN_COL, W // 2, H // 5 + 60)
+    elif false_start_player is not None:
         from game import Mode
         if mode == Mode.SOLO:
             pixel_text(surf, "YOU JUMPED THE GUN!", fonts["big"], LOSE_COL, W // 2, H // 5)
@@ -437,21 +447,21 @@ def _draw_scores(surf, fonts, scores, mode, p1_label, p2_label, W, H,
         surf.blit(r, (W - r.get_width() - 20, 10))
 
 
-def _draw_key_hints(surf, fonts, mode, W, H, settings=None):
+def _draw_key_hints(surf, fonts, mode, W, H, settings=None, prompt_char=None):
     from game import Mode
     if mode == Mode.LOCAL:
         p1_name = pygame.key.name(settings.p1_key).upper() if settings else "LEFT SHIFT"
         p2_name = pygame.key.name(settings.p2_key).upper() if settings else "RIGHT SHIFT"
         pixel_text(surf, f"[{p1_name}]  P1 FIRE          P2 FIRE  [{p2_name}]",
                    fonts["small"], TEXT_DIM, W // 2, H - 30)
-    elif mode == Mode.SOLO:
-        solo_name = pygame.key.name(settings.solo_key).upper() if settings else "SPACE"
-        pixel_text(surf, f"[{solo_name}]  FIRE",
-                   fonts["small"], TEXT_DIM, W // 2, H - 30)
+    elif prompt_char is not None:
+        pixel_text(surf, "WRONG KEY = MISFIRE", fonts["hint"], LOSE_COL, W // 2, H - 30)
+    elif mode in (Mode.SOLO, Mode.ONLINE):
+        pixel_text(surf, "WATCH FOR YOUR KEY...", fonts["hint"], TEXT_DIM, W // 2, H - 30)
     else:
         solo_name = pygame.key.name(settings.solo_key).upper() if settings else "SPACE"
         pixel_text(surf, f"[{solo_name}]  FIRE",
-                   fonts["small"], TEXT_DIM, W // 2, H - 30)
+                   fonts["hint"], TEXT_DIM, W // 2, H - 30)
 
 
 def make_fonts() -> dict:
@@ -464,5 +474,6 @@ def make_fonts() -> dict:
         "big":   pygame.font.Font(name or None, 48),
         "score": pygame.font.Font(name or None, 36),
         "med":   pygame.font.Font(name or None, 28),
+        "hint":  pygame.font.Font(name or None, 22),
         "small": pygame.font.Font(name or None, 18),
     }

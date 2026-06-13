@@ -359,6 +359,7 @@ def _poll_network(net: NetworkClient, sess: Session,
             sess.state = State.READY
 
         elif t == "draw":
+            sess.prompt_char = msg.get("key")
             sess.set_draw()
 
         elif t == "fire":
@@ -366,6 +367,13 @@ def _poll_network(net: NetworkClient, sess: Session,
 
         elif t == "false_start":
             sess.false_start_player = msg["offender"]
+            sess.winner = msg["winner"]
+            if sess.winner is not None:
+                sess.scores[sess.winner % 2] += 1
+            sess.state = State.RESULT
+
+        elif t == "misfire":
+            sess.misfire_player = msg["offender"]
             sess.winner = msg["winner"]
             if sess.winner is not None:
                 sess.scores[sess.winner % 2] += 1
@@ -540,7 +548,6 @@ def main_v2():
     splash_start      = time.perf_counter()
 
     settings_selected  = 0    # cursor in settings screen
-    settings_listening = False # waiting for a new key binding
 
     global _in_mode_select, _mode_select_idx
     _in_mode_select = False
@@ -631,19 +638,44 @@ def main_v2():
                         online_phase_ref[0] = "choose"
 
                 # Ready
-                elif sess.state == State.READY and sess.mode != Mode.ONLINE:
-                    res = _handle_fire_key(k, sess)
-                    if res == "false_start":
+                elif sess.state == State.READY:
+                    if sess.mode == Mode.LOCAL:
+                        res = _handle_fire_key(k, sess)
+                        if res == "false_start":
+                            snd.play_gunshot()
+                            _do_false_start(sess, _key_to_player(k, sess))
+                    elif event.unicode:  # SOLO / ONLINE — any non-modifier key jumps the gun
                         snd.play_gunshot()
-                        _do_false_start(sess, _key_to_player(k, sess))
+                        if sess.mode == Mode.ONLINE:
+                            net.send({"type": "fire"})
+                        else:
+                            _do_false_start(sess, 0)
 
                 # Draw
                 elif sess.state == State.DRAW:
+                    ch = event.unicode.upper()
                     if sess.mode == Mode.ONLINE:
-                        if k == sess.settings.solo_key:
-                            net.send({"type": "fire"})
-                            snd.play_gunshot()
-                    else:
+                        if ch:  # ignore bare modifier keys
+                            if ch == sess.prompt_char:
+                                t_ms = int((time.perf_counter() - sess.draw_time) * 1000) \
+                                       if sess.draw_time else 0
+                                net.send({"type": "fire", "client_time_ms": t_ms})
+                                snd.play_gunshot()
+                            else:
+                                net.send({"type": "misfire"})
+                                snd.play_gunshot()
+                    elif sess.prompt_char is not None:  # SOLO
+                        if ch:
+                            if ch == sess.prompt_char:
+                                res = sess.fire(0)
+                                if res == "ok":
+                                    flash_val = 1.0
+                                    snd.play_gunshot()
+                            else:
+                                snd.play_gunshot()
+                                sess.do_misfire(0)
+                                sess.state = State.RESULT
+                    else:  # LOCAL — unchanged
                         res = _handle_fire_key(k, sess)
                         if res == "ok":
                             flash_val = 1.0
@@ -696,37 +728,22 @@ def main_v2():
 
                 # Settings
                 elif sess.state == State.SETTINGS:
-                    if settings_listening:
-                        if k == pygame.K_ESCAPE:
-                            settings_listening = False
-                        else:
-                            if settings_selected == 0:
-                                sess.settings.solo_key = k
-                            elif settings_selected == 1:
-                                sess.settings.p1_key = k
-                            elif settings_selected == 2:
-                                sess.settings.p2_key = k
-                            settings_listening = False
-                    else:
-                        if k in (pygame.K_UP, pygame.K_w):
-                            settings_selected = (settings_selected - 1) % 5
-                            snd.play_blip()
-                        elif k in (pygame.K_DOWN, pygame.K_s):
-                            settings_selected = (settings_selected + 1) % 5
-                            snd.play_blip()
-                        elif k in (pygame.K_RETURN, pygame.K_SPACE):
-                            snd.play_confirm()
-                            if settings_selected < 3:
-                                settings_listening = True
-                            elif settings_selected == 3:
-                                sess.settings.sound_on = not sess.settings.sound_on
-                            elif settings_selected == 4:
-                                sess.settings.music_on = not sess.settings.music_on
-                                snd.on_music_toggle()
-                        elif k == pygame.K_ESCAPE:
-                            sess.state = State.MENU
-                            _in_mode_select = True
-                            settings_listening = False
+                    if k in (pygame.K_UP, pygame.K_w):
+                        settings_selected = (settings_selected - 1) % 2
+                        snd.play_blip()
+                    elif k in (pygame.K_DOWN, pygame.K_s):
+                        settings_selected = (settings_selected + 1) % 2
+                        snd.play_blip()
+                    elif k in (pygame.K_RETURN, pygame.K_SPACE):
+                        snd.play_confirm()
+                        if settings_selected == 0:
+                            sess.settings.sound_on = not sess.settings.sound_on
+                        elif settings_selected == 1:
+                            sess.settings.music_on = not sess.settings.music_on
+                            snd.on_music_toggle()
+                    elif k == pygame.K_ESCAPE:
+                        sess.state = State.MENU
+                        _in_mode_select = True
 
         op = online_phase_ref[0]
 
@@ -831,7 +848,8 @@ def main_v2():
                              best_solo=sess.best_solo, settings=sess.settings)
             elif st == State.DRAW:
                 render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l,
-                            flash_val, best_solo=sess.best_solo, settings=sess.settings)
+                            flash_val, best_solo=sess.best_solo, settings=sess.settings,
+                            prompt_char=sess.prompt_char)
             elif st == State.RESULT:
                 if result_entered_at is not None:
                     _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
@@ -844,15 +862,15 @@ def main_v2():
                               is_host=sess.is_host,
                               best_solo=sess.best_solo,
                               flash=flash_val,
-                              countdown=_cd)
+                              countdown=_cd,
+                              misfire_player=sess.misfire_player)
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:
                 render_victory(surf, fonts, sess.scores, p1l, p2l,
                                is_online=sess.mode == Mode.ONLINE)
             elif st == State.SETTINGS:
-                render_settings(surf, fonts, sess.settings,
-                                settings_selected, settings_listening)
+                render_settings(surf, fonts, sess.settings, settings_selected)
 
         if splash_done and intro_fade < 1.6 and tick % 3 == 0:
             intro_fade = min(1.6, intro_fade + 1 / 60)  # overlay clears at 1.0, title at 1.25, help text at 1.6

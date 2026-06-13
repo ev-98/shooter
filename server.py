@@ -32,6 +32,7 @@ class Room:
         self.fires: dict = {}
         self.draw_time: float | None = None
         self._resolve_task = None
+        self.prompt_key: str | None = None
 
     async def broadcast(self, msg: dict):
         data = json.dumps(msg)
@@ -55,7 +56,8 @@ class Room:
 
         self.state = "draw"
         self.draw_time = time.perf_counter()
-        await self.broadcast({"type": "draw"})
+        self.prompt_key = random.choice(string.ascii_uppercase)
+        await self.broadcast({"type": "draw", "key": self.prompt_key})
 
         await asyncio.sleep(5.0)
         if self.state == "draw":
@@ -99,6 +101,17 @@ class Room:
         await asyncio.sleep(0.3)
         if self.state == "draw":
             await self._resolve()
+
+    async def handle_misfire(self, player_idx: int):
+        if self.state not in ("ready", "draw"):
+            return
+        self.state = "done"
+        winner = 1 - player_idx
+        await self.broadcast({
+            "type": "misfire",
+            "offender": player_idx,
+            "winner": winner,
+        })
 
     async def _resolve(self):
         if self.state != "draw":
@@ -148,6 +161,9 @@ async def handler(websocket):
                     client_time_ms=msg.get("client_time_ms"),
                     arrival_time=time.perf_counter(),
                 )
+
+            elif t == "misfire" and room is not None and player_idx is not None:
+                await room.handle_misfire(player_idx)
 
             elif t == "rematch" and room is not None and player_idx == 0:
                 room.state = "waiting"

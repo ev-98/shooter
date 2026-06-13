@@ -1,4 +1,6 @@
 """Core game state — no pygame dependency."""
+import random
+import string
 import time
 from enum import Enum, auto
 
@@ -53,16 +55,29 @@ class Session:
         self.text_input: str = ""           # reused for IP / room code entry
         self.online_error: str = ""
         self.settings: Settings = Settings()
+        self.prompt_char: str | None = None  # random alphanumeric shown on DRAW (None = LOCAL)
+        self.misfire_player: int | None = None
 
     def reset_round(self):
         self.last_times = {}
         self.winner = None
         self.false_start_player = None
+        self.misfire_player = None
         self.draw_time = None
+        self.prompt_char = None
 
     def set_draw(self):
         self.draw_time = time.perf_counter()
+        if self.mode == Mode.SOLO:
+            self.prompt_char = random.choice(string.ascii_uppercase)
         self.state = State.DRAW
+
+    def do_misfire(self, player_idx: int):
+        """Wrong key pressed during DRAW — that player loses the round."""
+        self.misfire_player = player_idx
+        if self.mode != Mode.SOLO:
+            self.winner = 1 - player_idx
+            self.scores[self.winner] += 1
 
     def fire(self, player_idx: int) -> str:
         """
