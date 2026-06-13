@@ -754,6 +754,8 @@ def main_v2():
                 elif sess.state == State.SETTINGS:
                     if name_editing:
                         if k == pygame.K_ESCAPE or k in (pygame.K_RETURN, pygame.K_SPACE):
+                            if not sess.settings.player_name:
+                                sess.settings.player_name = "PLAYER"
                             name_editing = False
                         elif k == pygame.K_BACKSPACE:
                             sess.settings.player_name = sess.settings.player_name[:-1]

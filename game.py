@@ -1,4 +1,6 @@
 """Core game state — no pygame dependency."""
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -7,18 +9,29 @@ import time
 from enum import Enum, auto
 
 SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
+_SAVE_KEY = b"high-noon-showdown-v1"
+
+def _sign(data: dict) -> str:
+    payload = json.dumps(data, sort_keys=True).encode()
+    return hmac.new(_SAVE_KEY, payload, hashlib.sha256).hexdigest()
 
 def load_save() -> dict:
     try:
         with open(SAVE_PATH) as f:
-            return json.load(f)
+            saved = json.load(f)
+        sig = saved.pop("_sig", None)
+        if not sig or not hmac.compare_digest(sig, _sign(saved)):
+            return {}
+        return saved
     except Exception:
         return {}
 
 def write_save(data: dict):
     try:
+        payload = {k: v for k, v in data.items() if k != "_sig"}
+        payload["_sig"] = _sign(payload)
         with open(SAVE_PATH, "w") as f:
-            json.dump(data, f)
+            json.dump(payload, f)
     except Exception:
         pass
 
