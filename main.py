@@ -421,8 +421,17 @@ def _poll_network(net: NetworkClient, sess: Session,
                 sess.pressed_display[player] = key
 
         elif t == "opponent_left":
-            sess.online_error = "Opponent disconnected."
-            sess.state = State.MENU
+            _active = {State.MATCH_INTRO, State.LOBBY, State.READY, State.DRAW, State.RESULT}
+            if sess.state in _active:
+                my_idx = sess.player_idx or 0
+                sess.winner = my_idx
+                sess.false_start_player = None
+                sess.last_times = {}
+                sess.state = State.RESULT
+                net.close()
+            else:
+                sess.online_error = "Opponent disconnected."
+                sess.state = State.MENU
 
         elif t == "error":
             sess.online_error = msg.get("msg", "Unknown error")
@@ -589,7 +598,8 @@ def main_v2():
     cursor_tick       = 0
     flash_val         = 0.0
     match_intro_until = 0.0
-    result_entered_at: float | None = None
+    result_entered_at:  float | None = None
+    victory_entered_at: float | None = None
     intro_fade        = 0.0   # 0 = black, 1 = fully visible; plays once on launch
     splash_done       = False
     splash_gun_fired  = False
@@ -685,7 +695,7 @@ def main_v2():
                             result_entered_at += frozen
                         quit_confirm = False
                     continue
-                if k == pygame.K_ESCAPE and sess.state in _QUITTABLE:
+                if k == pygame.K_ESCAPE and sess.state in _QUITTABLE and sess.mode != Mode.ONLINE:
                     quit_confirm = True
                     quit_confirm_at = time.perf_counter()
                     quit_selected = 0
@@ -907,6 +917,9 @@ def main_v2():
                 my = sess.player_idx or 0
                 if sess.scores[my] > sess.scores[1 - my]:
                     sess.online_wins += 1
+                victory_entered_at = time.perf_counter()
+            elif sess.state != State.VICTORY:
+                victory_entered_at = None
             if sess.state == State.RESULT:
                 result_entered_at = time.perf_counter()
             elif sess.state != State.RESULT:
@@ -945,11 +958,23 @@ def main_v2():
             if time.perf_counter() - result_entered_at >= 3.0:
                 result_entered_at = None
                 if sess.mode == Mode.ONLINE:
-                    if sess.is_host:
-                        net.send({"type": "rematch"})
+                    if net.connected:
+                        if sess.is_host:
+                            net.send({"type": "rematch"})
+                    else:
+                        online_phase_ref[0] = "choose"
+                        sess.state = State.ONLINE_SETUP
                 else:
                     _start_local_round(sess)
                     draw_trigger_ref[0] = reset_draw_timer()
+
+        # Online victory auto-redirect after 3 seconds
+        if sess.state == State.VICTORY and sess.mode == Mode.ONLINE and victory_entered_at is not None:
+            if time.perf_counter() - victory_entered_at >= 3.0:
+                victory_entered_at = None
+                net.close()
+                online_phase_ref[0] = "choose"
+                sess.state = State.ONLINE_SETUP
 
         # Render
         if not splash_done:
@@ -1003,7 +1028,12 @@ def main_v2():
                               misfire_player=sess.misfire_player,
                               online_wins=sess.online_wins,
                               pressed_display=sess.pressed_display,
-                              cheat_player=sess.cheat_player)
+                              cheat_player=sess.cheat_player,
+                              disconnect_label=(
+                                  f"{sess.opponent_name}  DISCONNECTED"
+                                  if sess.mode == Mode.ONLINE and not net.connected
+                                  else None
+                              ))
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:

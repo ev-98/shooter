@@ -377,7 +377,8 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
                   best_solo=None, flash: float = 0.0, countdown: int = 3,
                   misfire_player: int | None = None, online_wins=0,
-                  pressed_display=None, cheat_player: int | None = None):
+                  pressed_display=None, cheat_player: int | None = None,
+                  disconnect_label: str | None = None):
     draw_bg(surf, flash)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -435,14 +436,17 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
             labels = [p1_label, p2_label]
             pixel_text(surf, f"{labels[winner]}  WINS!", fonts["big"],
                        WIN_COL, W // 2, H // 5)
-            time_vals = list(times.values())
-            show_decimal = len(time_vals) == 2 and int(time_vals[0]) == int(time_vals[1])
-            for idx, ms in sorted(times.items()):
-                col = WIN_COL if idx == winner else TEXT_DIM
-                label = labels[idx]
-                cy = H // 5 + 60 + (idx * 32)
-                ms_str = f"{ms:.2f}" if show_decimal else str(int(ms))
-                pixel_text(surf, f"{label}  {ms_str} ms", fonts["med"], col, W // 2, cy)
+            if disconnect_label:
+                pixel_text(surf, disconnect_label, fonts["med"], LOSE_COL, W // 2, H // 5 + 60)
+            else:
+                time_vals = list(times.values())
+                show_decimal = len(time_vals) == 2 and int(time_vals[0]) == int(time_vals[1])
+                for idx, ms in sorted(times.items()):
+                    col = WIN_COL if idx == winner else TEXT_DIM
+                    label = labels[idx]
+                    cy = H // 5 + 60 + (idx * 32)
+                    ms_str = f"{ms:.2f}" if show_decimal else str(int(ms))
+                    pixel_text(surf, f"{label}  {ms_str} ms", fonts["med"], col, W // 2, cy)
 
     # Rematch prompt
     if is_online:
