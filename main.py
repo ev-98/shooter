@@ -81,6 +81,10 @@ def main():
     pygame.init()
     surf  = pygame.display.set_mode((W, H))
     pygame.display.set_caption(TITLE)
+    try:
+        pygame.display.set_icon(pygame.image.load("icon.png"))
+    except Exception:
+        pass
     clock = pygame.time.Clock()
     fonts = make_fonts()
 
@@ -574,6 +578,10 @@ def main_v2():
     pygame.init()
     surf  = pygame.display.set_mode((W, H))
     pygame.display.set_caption(TITLE)
+    try:
+        pygame.display.set_icon(pygame.image.load("icon.png"))
+    except Exception:
+        pass
     clock = pygame.time.Clock()
     fonts = make_fonts()
 

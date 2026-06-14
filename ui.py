@@ -150,6 +150,9 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float 
         pixel_text(surf, "[ PRESS SPACE TO START ]", fonts["med"], TEXT_DIM,
                    W // 2, H // 2 + 20)
 
+    if intro_fade >= 1.25:
+        pixel_text(surf, "v1.0", fonts["med"], TEXT_DIM, W // 2, H - 22)
+
     # Stepped black overlay — quantised to 8 levels for 8-bit feel
     if intro_fade < 1.0:
         raw = (1.0 - intro_fade) * 255
