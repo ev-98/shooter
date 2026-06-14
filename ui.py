@@ -1,3 +1,4 @@
+from __future__ import annotations
 """All pygame rendering. No game logic here."""
 import math
 import pygame

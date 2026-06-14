@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Sound manager — loads from sounds/ folder, falls back to 8-bit procedural tones."""
 import array
 import math

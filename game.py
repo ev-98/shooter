@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Core game state — no pygame dependency."""
 import hashlib
 import hmac

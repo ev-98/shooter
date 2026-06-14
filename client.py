@@ -1,3 +1,4 @@
+from __future__ import annotations
 """WebSocket client — background thread with its own asyncio loop.
 
 Records the moment each DRAW signal arrives and automatically injects
