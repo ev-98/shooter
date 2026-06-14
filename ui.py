@@ -446,12 +446,8 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
 
     # Rematch prompt
     if is_online:
-        if is_host:
-            pixel_text(surf, "R  rematch     ESC  quit",
-                       fonts["small"], TEXT_DIM, W // 2, H - 40)
-        else:
-            pixel_text(surf, "WAITING FOR HOST...    ESC  QUIT",
-                       fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        pixel_text(surf, "ESC  quit", fonts["small"], TEXT_DIM, W // 2, H - 20)
     else:
         from game import Mode as _Mode
         pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)

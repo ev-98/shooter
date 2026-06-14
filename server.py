@@ -134,7 +134,7 @@ class Room:
             self._resolve_task = asyncio.create_task(self._delayed_resolve())
 
     async def _delayed_resolve(self):
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(1.0)
         if self.state == "draw":
             await self._resolve()
 

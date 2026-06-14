@@ -598,6 +598,7 @@ def main_v2():
     settings_selected  = 0    # cursor in settings screen
     name_editing       = False
     online_fired       = False  # prevents sending more than one fire/misfire per round
+    local_grace_deadline: float | None = None  # 1 s window after first LOCAL fire
 
     global _in_mode_select, _mode_select_idx
     _in_mode_select = False
@@ -734,11 +735,13 @@ def main_v2():
                                 snd.play_gunshot()
                                 sess.do_misfire(0)
                                 sess.state = State.RESULT
-                    else:  # LOCAL — unchanged
+                    else:  # LOCAL
                         res = _handle_fire_key(k, sess)
                         if res == "ok":
                             flash_val = 1.0
                             snd.play_gunshot()
+                            if len(sess.last_times) == 1 and local_grace_deadline is None:
+                                local_grace_deadline = time.perf_counter() + 1.0
 
                 # Result
                 elif sess.state == State.RESULT:
@@ -842,6 +845,13 @@ def main_v2():
 
         if sess.state == State.DRAW and sess.mode == Mode.LOCAL:
             if sess.resolve_local_or_wait(2):
+                local_grace_deadline = None
+                sess.state = State.RESULT
+                flash_val = 1.0
+            elif local_grace_deadline and time.perf_counter() >= local_grace_deadline:
+                local_grace_deadline = None
+                sess.winner = min(sess.last_times, key=sess.last_times.get)
+                sess.scores[sess.winner] += 1
                 sess.state = State.RESULT
                 flash_val = 1.0
 
@@ -863,11 +873,12 @@ def main_v2():
         if sess.state != prev_state:
             if sess.state == State.READY:
                 online_fired = False
+                local_grace_deadline = None
             if sess.state == State.VICTORY and sess.mode == Mode.ONLINE:
                 my = sess.player_idx or 0
                 if sess.scores[my] > sess.scores[1 - my]:
                     sess.online_wins += 1
-            if sess.state == State.RESULT and sess.mode in (Mode.LOCAL, Mode.SOLO):
+            if sess.state == State.RESULT:
                 result_entered_at = time.perf_counter()
             elif sess.state != State.RESULT:
                 result_entered_at = None
@@ -897,12 +908,16 @@ def main_v2():
                 _start_local_round(sess)
                 draw_trigger_ref[0] = reset_draw_timer()
 
-        # Result auto-advance after 3 seconds (LOCAL duel and SOLO)
-        if sess.state == State.RESULT and sess.mode in (Mode.LOCAL, Mode.SOLO) and result_entered_at is not None:
+        # Result auto-advance after 3 seconds
+        if sess.state == State.RESULT and result_entered_at is not None:
             if time.perf_counter() - result_entered_at >= 3.0:
                 result_entered_at = None
-                _start_local_round(sess)
-                draw_trigger_ref[0] = reset_draw_timer()
+                if sess.mode == Mode.ONLINE:
+                    if sess.is_host:
+                        net.send({"type": "rematch"})
+                else:
+                    _start_local_round(sess)
+                    draw_trigger_ref[0] = reset_draw_timer()
 
         # Render
         if not splash_done:
