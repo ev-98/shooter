@@ -152,7 +152,10 @@ class Room:
         if self.state != "draw":
             return
         self.state = "done"
-        if self._resolve_task:
+        # Only cancel the pending delayed-resolve task if it isn't the current
+        # task — cancelling yourself causes CancelledError at the next await,
+        # which would silently abort the broadcast below.
+        if self._resolve_task and self._resolve_task is not asyncio.current_task():
             self._resolve_task.cancel()
         winner = min(self.fires, key=self.fires.get)
         times = {str(k): round(v) for k, v in self.fires.items()}
@@ -194,6 +197,9 @@ async def handler(websocket):
                 asyncio.create_task(room.start_round())
 
             elif t == "fire" and room is not None and player_idx is not None:
+                key = msg.get("key", "")
+                if key:
+                    await room.broadcast({"type": "key_pressed", "player": player_idx, "key": key})
                 await room.handle_fire(
                     player_idx,
                     client_time_ms=msg.get("client_time_ms"),
@@ -201,6 +207,9 @@ async def handler(websocket):
                 )
 
             elif t == "misfire" and room is not None and player_idx is not None:
+                key = msg.get("key", "")
+                if key:
+                    await room.broadcast({"type": "key_pressed", "player": player_idx, "key": key})
                 await room.handle_misfire(player_idx)
 
             elif t == "pong" and room is not None and player_idx is not None:

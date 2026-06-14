@@ -402,10 +402,22 @@ def _poll_network(net: NetworkClient, sess: Session,
             sess.last_times = {int(k): v for k, v in msg["times"].items()}
             if sess.winner is not None:
                 sess.scores[sess.winner % 2] += 1
+            # Derive pressed key for any player whose fire was recorded.
+            # Falls back gracefully when the server doesn't relay key_pressed.
+            if sess.prompt_char:
+                for p in sess.last_times:
+                    if not sess.pressed_display[p]:
+                        sess.pressed_display[p] = sess.prompt_char
             sess.state = State.RESULT
 
         elif t == "timeout":
             sess.state = State.TIMEOUT
+
+        elif t == "key_pressed":
+            player = msg.get("player")
+            key = msg.get("key", "")
+            if player is not None and key:
+                sess.pressed_display[player] = key
 
         elif t == "opponent_left":
             sess.online_error = "Opponent disconnected."
@@ -585,6 +597,7 @@ def main_v2():
 
     settings_selected  = 0    # cursor in settings screen
     name_editing       = False
+    online_fired       = False  # prevents sending more than one fire/misfire per round
 
     global _in_mode_select, _mode_select_idx
     _in_mode_select = False
@@ -687,7 +700,9 @@ def main_v2():
                     elif event.unicode:  # SOLO / ONLINE — any non-modifier key jumps the gun
                         snd.play_gunshot()
                         if sess.mode == Mode.ONLINE:
-                            net.send({"type": "fire"})
+                            if not online_fired:
+                                net.send({"type": "fire", "key": event.unicode.upper()})
+                                online_fired = True
                         else:
                             _do_false_start(sess, 0)
 
@@ -695,16 +710,18 @@ def main_v2():
                 elif sess.state == State.DRAW:
                     ch = event.unicode.upper()
                     if sess.mode == Mode.ONLINE:
-                        if ch:  # ignore bare modifier keys
+                        if ch and not online_fired:  # ignore bare modifier keys; only fire once
                             sess.pressed_display[sess.player_idx or 0] = ch
                             if ch == sess.prompt_char:
                                 t_ms = int((time.perf_counter() - sess.draw_time) * 1000) \
                                        if sess.draw_time else 0
-                                net.send({"type": "fire", "client_time_ms": t_ms})
+                                net.send({"type": "fire", "client_time_ms": t_ms, "key": ch})
                                 snd.play_gunshot()
+                                online_fired = True
                             else:
-                                net.send({"type": "misfire"})
+                                net.send({"type": "misfire", "key": ch})
                                 snd.play_gunshot()
+                                online_fired = True
                     elif sess.prompt_char is not None:  # SOLO
                         if ch:
                             sess.pressed_display[0] = ch
@@ -844,6 +861,8 @@ def main_v2():
         flash_val = max(0.0, flash_val - 0.04)
 
         if sess.state != prev_state:
+            if sess.state == State.READY:
+                online_fired = False
             if sess.state == State.VICTORY and sess.mode == Mode.ONLINE:
                 my = sess.player_idx or 0
                 if sess.scores[my] > sess.scores[1 - my]:
