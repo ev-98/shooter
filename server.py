@@ -103,19 +103,20 @@ class Room:
             else None
         )
 
-        # Anti-cheat: validate client-reported reaction time.
-        if client_time_ms is not None and server_delta_ms is not None:
-            rtt = self.player_rtt.get(player_idx, 300)
-            min_plausible = server_delta_ms - rtt - RTT_TOLERANCE_MS
-            if client_time_ms < MIN_REACTION_MS or client_time_ms < min_plausible:
-                self.state = "done"
-                winner = 1 - player_idx
-                await self.broadcast({
-                    "type": "cheat",
-                    "offender": player_idx,
-                    "winner": winner,
-                })
-                return
+        # Anti-cheat: reject physically impossible reaction times only.
+        # The min_plausible (RTT-based) check was removed — measured min-RTT
+        # is consistently lower than actual RTT at fire time due to network
+        # jitter and async send-queue delay, causing systematic false positives
+        # against the first player to fire.
+        if client_time_ms is not None and client_time_ms < MIN_REACTION_MS:
+            self.state = "done"
+            winner = 1 - player_idx
+            await self.broadcast({
+                "type": "cheat",
+                "offender": player_idx,
+                "winner": winner,
+            })
+            return
 
         if client_time_ms is not None:
             reaction_ms = client_time_ms
