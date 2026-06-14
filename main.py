@@ -36,6 +36,7 @@ from ui import (
     render_menu,
     render_mode_select,
     render_online_setup,
+    render_quit_confirm,
     render_ready,
     render_result,
     render_settings,
@@ -363,7 +364,7 @@ def _poll_network(net: NetworkClient, sess: Session,
             opp_idx = str(1 - (sess.player_idx or 0))
             sess.opponent_name = names.get(opp_idx, "OPPONENT")
             sess.reset_round()
-            sess.state = State.LOBBY
+            sess.state = State.MATCH_INTRO
 
         elif t == "ready":
             sess.reset_round()
@@ -535,8 +536,7 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
             sess.mode = Mode.SOLO
             sess.scores = [0, 0]
             sess.reset_round()
-            sess.state = State.READY
-            draw_trigger_ref[0] = reset_draw_timer()
+            sess.state = State.MATCH_INTRO
         elif _mode_select_idx == 1:     # LOCAL
             sess.mode = Mode.LOCAL
             sess.scores = [0, 0]
@@ -599,6 +599,9 @@ def main_v2():
     name_editing       = False
     online_fired       = False  # prevents sending more than one fire/misfire per round
     local_grace_deadline: float | None = None  # 1 s window after first LOCAL fire
+    quit_confirm       = False
+    quit_confirm_at    = 0.0
+    quit_selected      = 0   # 0 = YES, 1 = NO
 
     global _in_mode_select, _mode_select_idx
     _in_mode_select = False
@@ -634,6 +637,58 @@ def main_v2():
                         snd.play_blip()
                     elif k == pygame.K_SPACE:
                         snd.play_confirm()
+                    continue
+
+                # Quit confirm popup
+                _QUITTABLE = {State.MATCH_INTRO, State.LOBBY,
+                               State.RESULT, State.VICTORY, State.TIMEOUT}
+                if quit_confirm:
+                    do_quit = False
+                    do_cancel = False
+                    if k in (pygame.K_UP, pygame.K_w):
+                        quit_selected = (quit_selected - 1) % 2
+                        snd.play_blip()
+                    elif k in (pygame.K_DOWN, pygame.K_s):
+                        quit_selected = (quit_selected + 1) % 2
+                        snd.play_blip()
+                    elif k == pygame.K_1:
+                        quit_selected = 0
+                        do_quit = True
+                        snd.play_confirm()
+                    elif k == pygame.K_2:
+                        quit_selected = 1
+                        do_cancel = True
+                        snd.play_confirm()
+                    elif k in (pygame.K_RETURN, pygame.K_SPACE):
+                        snd.play_confirm()
+                        if quit_selected == 0:
+                            do_quit = True
+                        else:
+                            do_cancel = True
+                    elif k == pygame.K_ESCAPE:
+                        do_cancel = True
+                    if do_quit:
+                        if sess.mode == Mode.ONLINE:
+                            net.close()
+                            online_phase_ref[0] = "choose"
+                            sess.state = State.ONLINE_SETUP
+                        else:
+                            sess.state = State.MENU
+                            _in_mode_select = True
+                        quit_confirm = False
+                    elif do_cancel:
+                        frozen = time.perf_counter() - quit_confirm_at
+                        if draw_trigger_ref[0]:
+                            draw_trigger_ref[0] += frozen
+                        match_intro_until += frozen
+                        if result_entered_at is not None:
+                            result_entered_at += frozen
+                        quit_confirm = False
+                    continue
+                if k == pygame.K_ESCAPE and sess.state in _QUITTABLE:
+                    quit_confirm = True
+                    quit_confirm_at = time.perf_counter()
+                    quit_selected = 0
                     continue
 
                 # Main menu
@@ -683,13 +738,6 @@ def main_v2():
                             net.close()
                             online_phase_ref[0] = "choose"
                             sess.online_error = ""
-
-                # Lobby
-                elif sess.state == State.LOBBY:
-                    if k == pygame.K_ESCAPE:
-                        net.close()
-                        sess.state = State.ONLINE_SETUP
-                        online_phase_ref[0] = "choose"
 
                 # Ready
                 elif sess.state == State.READY:
@@ -752,14 +800,6 @@ def main_v2():
                         elif sess.mode == Mode.LOCAL:
                             _start_local_round(sess)
                             draw_trigger_ref[0] = reset_draw_timer()
-                    elif k == pygame.K_ESCAPE:
-                        if sess.mode == Mode.ONLINE:
-                            net.close()
-                            online_phase_ref[0] = "choose"
-                            sess.state = State.ONLINE_SETUP
-                        else:
-                            sess.state = State.MENU
-                            _in_mode_select = True
 
                 # Victory (match over)
                 elif sess.state == State.VICTORY:
@@ -767,23 +807,12 @@ def main_v2():
                         sess.scores = [0, 0]
                         sess.reset_round()
                         sess.state = State.MATCH_INTRO
-                    elif k == pygame.K_ESCAPE:
-                        if sess.mode == Mode.ONLINE:
-                            net.close()
-                            online_phase_ref[0] = "choose"
-                            sess.state = State.ONLINE_SETUP
-                        else:
-                            sess.state = State.MENU
-                            _in_mode_select = True
 
                 # Timeout
                 elif sess.state == State.TIMEOUT:
                     if k == pygame.K_r:
                         _start_local_round(sess)
                         draw_trigger_ref[0] = reset_draw_timer()
-                    elif k == pygame.K_ESCAPE:
-                        sess.state = State.MENU
-                        _in_mode_select = True
 
                 # Settings
                 elif sess.state == State.SETTINGS:
@@ -830,7 +859,7 @@ def main_v2():
         op = online_phase_ref[0]
 
         # Local draw timer
-        if sess.state == State.READY and sess.mode != Mode.ONLINE:
+        if sess.state == State.READY and sess.mode != Mode.ONLINE and not quit_confirm:
             dt_ref = draw_trigger_ref[0]
             if dt_ref and time.perf_counter() >= dt_ref:
                 sess.set_draw()
@@ -903,13 +932,16 @@ def main_v2():
                 snd.start_wind()
 
         # Match intro auto-advance after 2 seconds
-        if sess.state == State.MATCH_INTRO:
+        if sess.state == State.MATCH_INTRO and not quit_confirm:
             if time.perf_counter() >= match_intro_until:
-                _start_local_round(sess)
-                draw_trigger_ref[0] = reset_draw_timer()
+                if sess.mode == Mode.ONLINE:
+                    sess.state = State.LOBBY
+                else:
+                    _start_local_round(sess)
+                    draw_trigger_ref[0] = reset_draw_timer()
 
         # Result auto-advance after 3 seconds
-        if sess.state == State.RESULT and result_entered_at is not None:
+        if sess.state == State.RESULT and result_entered_at is not None and not quit_confirm:
             if time.perf_counter() - result_entered_at >= 3.0:
                 result_entered_at = None
                 if sess.mode == Mode.ONLINE:
@@ -938,9 +970,11 @@ def main_v2():
                 render_online_setup(surf, fonts, ph_disp, join_code_buf,
                                     sess.online_error, sess.online_code, cursor_on)
             elif st == State.MATCH_INTRO:
-                _now = time.perf_counter()
+                _now = quit_confirm_at if quit_confirm else time.perf_counter()
+                _intro_label = "ENDLESS FIRE" if sess.mode == Mode.SOLO else "FIRST TO 10"
                 render_match_intro(surf, fonts,
-                                   show_text=match_intro_until - 2.0 <= _now < match_intro_until - 1.0)
+                                   show_text=match_intro_until - 2.0 <= _now < match_intro_until - 1.0,
+                                   intro_label=_intro_label)
             elif st == State.LOBBY:
                 render_lobby(surf, fonts, tick)
             elif st == State.READY:
@@ -954,7 +988,8 @@ def main_v2():
                             pressed_display=sess.pressed_display)
             elif st == State.RESULT:
                 if result_entered_at is not None:
-                    _cd = max(1, math.ceil(3.0 - (time.perf_counter() - result_entered_at)))
+                    _t = quit_confirm_at if quit_confirm else time.perf_counter()
+                    _cd = max(1, math.ceil(3.0 - (_t - result_entered_at)))
                 else:
                     _cd = 3
                 render_result(surf, fonts, sess.mode, sess.winner,
@@ -979,6 +1014,9 @@ def main_v2():
             elif st == State.DATA:
                 render_data(surf, fonts, sess.best_solo, sess.online_wins,
                             time_played_total + (time.perf_counter() - session_start))
+
+        if quit_confirm and splash_done:
+            render_quit_confirm(surf, fonts, quit_selected)
 
         if splash_done and intro_fade < 1.6 and tick % 3 == 0:
             intro_fade = min(1.6, intro_fade + 1 / 60)  # overlay clears at 1.0, title at 1.25, help text at 1.6

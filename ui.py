@@ -454,7 +454,28 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
         pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 
-def render_match_intro(surf: pygame.Surface, fonts: dict, show_text: bool = True):
+def render_quit_confirm(surf: pygame.Surface, fonts: dict, selected: int = 0):
+    W, H = surf.get_size()
+    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 160))
+    surf.blit(overlay, (0, 0))
+    pw, ph = 360, 175
+    px, py = W // 2 - pw // 2, H // 2 - ph // 2
+    pygame.draw.rect(surf, UI_BG, (px, py, pw, ph))
+    pygame.draw.rect(surf, WIN_COL, (px, py, pw, ph), 3)
+    pixel_text(surf, "QUIT THIS DUEL?", fonts["med"], TEXT_WARM, W // 2, py + 30)
+    options = [("1  YES", True), ("2  NO", False)]
+    for i, (label, _) in enumerate(options):
+        oy = py + 80 + i * 52
+        col = WIN_COL if i == selected else TEXT_WARM
+        if i == selected:
+            pygame.draw.rect(surf, (60, 40, 10),
+                             (W // 2 - 120, oy - 18, 240, 38), border_radius=4)
+        pixel_text(surf, label, fonts["med"], col, W // 2, oy)
+
+
+def render_match_intro(surf: pygame.Surface, fonts: dict, show_text: bool = True,
+                       intro_label: str = "FIRST TO 10"):
     draw_bg(surf)
     W, H = surf.get_size()
     horizon = int(H * 0.62)
@@ -462,7 +483,7 @@ def render_match_intro(surf: pygame.Surface, fonts: dict, show_text: bool = True
     draw_cowboy(surf, W // 4,     ground_y - SPRITE_H // 2, facing_right=True)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False)
     if show_text:
-        pixel_text(surf, "FIRST TO 10", fonts["big"], WIN_COL, W // 2, H // 3)
+        pixel_text(surf, intro_label, fonts["big"], WIN_COL, W // 2, H // 3)
 
 
 def render_victory(surf: pygame.Surface, fonts: dict, scores: list,
