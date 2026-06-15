@@ -425,6 +425,9 @@ def _poll_network(net: NetworkClient, sess: Session,
             if player is not None and key:
                 sess.pressed_display[player] = key
 
+        elif t == "rematch_vote":
+            pass  # server sends "start" when both votes arrive; tracked for UI by rematch_voted
+
         elif t == "opponent_left":
             _active = {State.MATCH_INTRO, State.LOBBY, State.READY, State.DRAW, State.RESULT}
             if sess.state in _active:
@@ -434,6 +437,8 @@ def _poll_network(net: NetworkClient, sess: Session,
                 sess.last_times = {}
                 sess.state = State.RESULT
                 net.close()
+            elif sess.state == State.VICTORY:
+                sess.rematch_declined = True
             else:
                 sess.online_error = "Opponent disconnected."
                 sess.state = State.MENU
@@ -617,6 +622,7 @@ def main_v2():
     settings_selected  = 0    # cursor in settings screen
     name_editing       = False
     online_fired       = False  # prevents sending more than one fire/misfire per round
+    rematch_voted      = False  # local player pressed SPACE on victory screen
     local_grace_deadline: float | None = None  # 1 s window after first LOCAL fire
     quit_confirm       = False
     quit_confirm_at    = 0.0
@@ -821,7 +827,15 @@ def main_v2():
 
                 # Victory (match over)
                 elif sess.state == State.VICTORY:
-                    if k == pygame.K_SPACE and sess.mode != Mode.ONLINE:
+                    if sess.mode == Mode.ONLINE:
+                        if k == pygame.K_SPACE and not rematch_voted and not sess.rematch_declined:
+                            rematch_voted = True
+                            net.send({"type": "rematch_vote"})
+                        elif k == pygame.K_ESCAPE:
+                            net.close()
+                            online_phase_ref[0] = "choose"
+                            sess.state = State.ONLINE_SETUP
+                    elif k == pygame.K_SPACE:
                         sess.scores = [0, 0]
                         sess.reset_round()
                         sess.state = State.MATCH_INTRO
@@ -910,10 +924,7 @@ def main_v2():
                 online_phase_ref[0] = _online_phase_sync(net, sess, op, join_code_buf)
             op = online_phase_ref[0]
 
-        # First-to-WIN_SCORE match victory (LOCAL / ONLINE only)
-        if sess.state == State.RESULT and sess.mode != Mode.SOLO:
-            if max(sess.scores) >= WIN_SCORE:
-                sess.state = State.VICTORY
+
 
         flash_val = max(0.0, flash_val - 0.04)
 
@@ -921,11 +932,14 @@ def main_v2():
             if sess.state == State.READY:
                 online_fired = False
                 local_grace_deadline = None
-            if sess.state == State.VICTORY and sess.mode == Mode.ONLINE:
-                my = sess.player_idx or 0
-                if sess.scores[my] > sess.scores[1 - my]:
-                    sess.online_wins += 1
-                victory_entered_at = time.perf_counter()
+            if sess.state == State.VICTORY:
+                rematch_voted = False
+                sess.rematch_declined = False
+                if sess.mode == Mode.ONLINE:
+                    my = sess.player_idx or 0
+                    if sess.scores[my] > sess.scores[1 - my]:
+                        sess.online_wins += 1
+                    victory_entered_at = time.perf_counter()
             elif sess.state != State.VICTORY:
                 victory_entered_at = None
             if sess.state == State.RESULT:
@@ -965,7 +979,9 @@ def main_v2():
         if sess.state == State.RESULT and result_entered_at is not None and not quit_confirm:
             if time.perf_counter() - result_entered_at >= 3.0:
                 result_entered_at = None
-                if sess.mode == Mode.ONLINE:
+                if sess.mode != Mode.SOLO and max(sess.scores) >= WIN_SCORE:
+                    sess.state = State.VICTORY
+                elif sess.mode == Mode.ONLINE:
                     if net.connected:
                         if sess.is_host:
                             net.send({"type": "rematch"})
@@ -975,14 +991,6 @@ def main_v2():
                 else:
                     _start_local_round(sess)
                     draw_trigger_ref[0] = reset_draw_timer()
-
-        # Online victory auto-redirect after 3 seconds
-        if sess.state == State.VICTORY and sess.mode == Mode.ONLINE and victory_entered_at is not None:
-            if time.perf_counter() - victory_entered_at >= 3.0:
-                victory_entered_at = None
-                net.close()
-                online_phase_ref[0] = "choose"
-                sess.state = State.ONLINE_SETUP
 
         # Render
         if not splash_done:
@@ -1046,7 +1054,9 @@ def main_v2():
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:
                 render_victory(surf, fonts, sess.scores, p1l, p2l,
-                               is_online=sess.mode == Mode.ONLINE)
+                               is_online=sess.mode == Mode.ONLINE,
+                               rematch_voted=rematch_voted,
+                               opponent_declined=sess.rematch_declined)
             elif st == State.SETTINGS:
                 render_settings(surf, fonts, sess.settings, settings_selected, name_editing)
             elif st == State.DATA:

@@ -98,6 +98,7 @@ class Session:
         self.cheat_player: int | None = None
         self.online_wins: int = 0
         self.pressed_display: list = ["", ""]  # key shown above each player after press
+        self.rematch_declined: bool = False
 
     def reset_round(self):
         self.last_times = {}

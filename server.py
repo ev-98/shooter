@@ -41,6 +41,7 @@ class Room:
         self.player_names: dict = {}
         self.player_rtt: dict = {}         # {player_idx: min rtt_ms so far}
         self.player_rtt_samples: dict = {} # {player_idx: [rtt_ms, ...]}
+        self.rematch_votes: set = set()
 
     async def measure_rtt(self):
         for _ in range(N_RTT_SAMPLES):
@@ -222,9 +223,14 @@ async def handler(websocket):
                     samples.append(rtt_ms)
                     room.player_rtt[player_idx] = min(samples)
 
-            elif t == "rematch" and room is not None and player_idx == 0:
-                room.state = "waiting"
-                asyncio.create_task(room.start_round())
+            elif t == "rematch_vote" and room is not None and player_idx is not None:
+                room.rematch_votes.add(player_idx)
+                await room.broadcast({"type": "rematch_vote", "player": player_idx})
+                if len(room.rematch_votes) >= len(room.players):
+                    room.rematch_votes.clear()
+                    await room.broadcast({"type": "start", "names": room.player_names})
+                    room.state = "waiting"
+                    asyncio.create_task(room.start_round())
 
     finally:
         if room and websocket in room.players:
