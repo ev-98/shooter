@@ -985,6 +985,10 @@ def main_v2():
                     _start_local_round(sess)
                     draw_trigger_ref[0] = reset_draw_timer()
 
+        # Ensure result timer is set even when RESULT was re-entered mid-frame
+        if sess.state == State.RESULT and result_entered_at is None:
+            result_entered_at = time.perf_counter()
+
         # Result auto-advance (2s on final winning round, 3s otherwise)
         _final_round = sess.mode != Mode.SOLO and max(sess.scores) >= WIN_SCORE
         if sess.state == State.RESULT and result_entered_at is not None and not quit_confirm:
