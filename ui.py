@@ -58,8 +58,10 @@ def draw_cowboy(surf: pygame.Surface, cx: int, cy: int, facing_right: bool,
                 fired: bool = False):
     """Draw cowboy silhouette centred at (cx, cy)."""
     grid = _COWBOY_R if facing_right else _COWBOY_L
+    phase = 0 if facing_right else 1
+    bob = not fired and (pygame.time.get_ticks() // 600 + phase) % 2 == 1
     ox = cx - SPRITE_W // 2
-    oy = cy - SPRITE_H // 2
+    oy = cy - SPRITE_H // 2 - (PX if bob else 0)
     col = (80, 60, 40) if fired else COWBOY
     for ry, row in enumerate(grid):
         for rx, cell in enumerate(row):
@@ -68,6 +70,11 @@ def draw_cowboy(surf: pygame.Surface, cx: int, cy: int, facing_right: bool,
             c = GUN if cell == 2 else col
             pygame.draw.rect(surf, c,
                              (ox + rx * PX, oy + ry * PX, PX, PX))
+    if bob:
+        extra_y = oy + len(grid) * PX
+        for rx, cell in enumerate(grid[-1]):
+            if cell == 1:
+                pygame.draw.rect(surf, col, (ox + rx * PX, extra_y, PX, PX))
 
 
 def draw_cactus(surf: pygame.Surface, x: int, y: int, h: int = 60):
@@ -388,8 +395,11 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     ground_y = horizon + 30
 
     # Draw cowboys — loser slumps (fired flag = grey)
+    from game import Mode as _Mode
     p1_fired = winner != 0
     p2_fired = winner != 1
+    if mode == _Mode.SOLO and winner is None:
+        p2_fired = False  # CPU wins when solo player misfires/false-starts
     draw_cowboy(surf, W // 4,    ground_y - SPRITE_H // 2, facing_right=True,  fired=p1_fired)
     draw_cowboy(surf, W * 3 // 4, ground_y - SPRITE_H // 2, facing_right=False, fired=p2_fired)
     _draw_cowboy_labels(surf, fonts, mode, p1_label, p2_label, W, H, online_wins,
