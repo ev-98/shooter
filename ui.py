@@ -378,7 +378,7 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
                   winner: int | None, false_start_player: int | None,
                   times: dict, scores: list,
                   p1_label: str, p2_label: str, is_online: bool, is_host: bool,
-                  best_solo=None, flash: float = 0.0, countdown: int = 3,
+                  best_solo=None, flash: float = 0.0, countdown: int | None = 3,
                   misfire_player: int | None = None, online_wins=0,
                   pressed_display=None, cheat_player: int | None = None,
                   disconnect_label: str | None = None):
@@ -453,11 +453,12 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
 
     # Rematch prompt
     if is_online:
-        pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 40)
+        if countdown is not None:
+            pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 40)
         pixel_text(surf, "ESC  quit", fonts["small"], TEXT_DIM, W // 2, H - 20)
     else:
-        from game import Mode as _Mode
-        pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
+        if countdown is not None:
+            pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)
         pixel_text(surf, "ESC  menu", fonts["small"], TEXT_DIM, W // 2, H - 30)
 
 
@@ -495,31 +496,33 @@ def render_match_intro(surf: pygame.Surface, fonts: dict, show_text: bool = True
 
 def render_victory(surf: pygame.Surface, fonts: dict, scores: list,
                    p1_label: str, p2_label: str, is_online: bool = False,
-                   rematch_voted: bool = False, opponent_declined: bool = False):
+                   rematch_voted: bool = False, opponent_declined: bool = False,
+                   show_text: bool = True):
     draw_bg(surf)
     W, H = surf.get_size()
     winner_idx = 0 if scores[0] >= scores[1] else 1
     winner_label = p1_label if winner_idx == 0 else p2_label
 
-    pixel_text(surf, "MATCH OVER", fonts["med"], TEXT_DIM, W // 2, H // 6)
-    pixel_text(surf, f"{winner_label}  WINS THE MATCH!", fonts["big"],
-               WIN_COL, W // 2, H // 3)
-    pixel_text(surf, f"{p1_label}  {scores[0]}  -  {scores[1]}  {p2_label}",
-               fonts["med"], TEXT_WARM, W // 2, H // 2)
+    if show_text:
+        pixel_text(surf, "MATCH OVER", fonts["med"], TEXT_DIM, W // 2, H // 6)
+        pixel_text(surf, f"{winner_label}  WINS THE MATCH!", fonts["big"],
+                   WIN_COL, W // 2, H // 3)
+        pixel_text(surf, f"{p1_label}  {scores[0]}  -  {scores[1]}  {p2_label}",
+                   fonts["med"], TEXT_WARM, W // 2, H // 2)
 
-    if is_online:
-        if opponent_declined:
-            pixel_text(surf, "Opponent declined rematch     ESC  leave",
-                       fonts["small"], TEXT_DIM, W // 2, H - 40)
-        elif rematch_voted:
-            pixel_text(surf, "Waiting for opponent...     ESC  leave",
-                       fonts["small"], TEXT_DIM, W // 2, H - 40)
+        if is_online:
+            if opponent_declined:
+                pixel_text(surf, "Opponent declined rematch     ESC  leave",
+                           fonts["small"], TEXT_DIM, W // 2, H - 40)
+            elif rematch_voted:
+                pixel_text(surf, "Waiting for opponent...     ESC  leave",
+                           fonts["small"], TEXT_DIM, W // 2, H - 40)
+            else:
+                pixel_text(surf, "SPACE  rematch     ESC  leave",
+                           fonts["small"], TEXT_DIM, W // 2, H - 40)
         else:
-            pixel_text(surf, "SPACE  rematch     ESC  leave",
+            pixel_text(surf, "SPACE  new match     ESC  menu",
                        fonts["small"], TEXT_DIM, W // 2, H - 40)
-    else:
-        pixel_text(surf, "SPACE  new match     ESC  menu",
-                   fonts["small"], TEXT_DIM, W // 2, H - 40)
 
 
 def render_false_start_flash(surf: pygame.Surface, fonts: dict,

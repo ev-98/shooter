@@ -623,6 +623,7 @@ def main_v2():
     name_editing       = False
     online_fired       = False  # prevents sending more than one fire/misfire per round
     rematch_voted      = False  # local player pressed SPACE on victory screen
+    bell_pending_at:  float | None = None
     local_grace_deadline: float | None = None  # 1 s window after first LOCAL fire
     quit_confirm       = False
     quit_confirm_at    = 0.0
@@ -935,11 +936,13 @@ def main_v2():
             if sess.state == State.VICTORY:
                 rematch_voted = False
                 sess.rematch_declined = False
+                victory_entered_at = time.perf_counter()
+                if sess.mode != Mode.SOLO:
+                    bell_pending_at = victory_entered_at + 1.0
                 if sess.mode == Mode.ONLINE:
                     my = sess.player_idx or 0
                     if sess.scores[my] > sess.scores[1 - my]:
                         sess.online_wins += 1
-                    victory_entered_at = time.perf_counter()
             elif sess.state != State.VICTORY:
                 victory_entered_at = None
             if sess.state == State.RESULT:
@@ -948,6 +951,7 @@ def main_v2():
                 result_entered_at = None
             if sess.state == State.MATCH_INTRO:
                 match_intro_until = time.perf_counter() + 3.0
+                bell_pending_at = match_intro_until - 2.0
             if sess.state in (State.MENU, State.READY, State.LOBBY, State.MATCH_INTRO):
                 snd.start_wind()
             elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT, State.VICTORY):
@@ -964,7 +968,13 @@ def main_v2():
                 splash_gun_fired = True
             if splash_elapsed >= 5.0:
                 splash_done = True
+                snd.play_bell()
                 snd.start_wind()
+
+        # Bell on match intro text appear
+        if bell_pending_at is not None and time.perf_counter() >= bell_pending_at:
+            snd.play_bell()
+            bell_pending_at = None
 
         # Match intro auto-advance after 2 seconds
         if sess.state == State.MATCH_INTRO and not quit_confirm:
@@ -975,9 +985,11 @@ def main_v2():
                     _start_local_round(sess)
                     draw_trigger_ref[0] = reset_draw_timer()
 
-        # Result auto-advance after 3 seconds
+        # Result auto-advance (2s on final winning round, 3s otherwise)
+        _final_round = sess.mode != Mode.SOLO and max(sess.scores) >= WIN_SCORE
         if sess.state == State.RESULT and result_entered_at is not None and not quit_confirm:
-            if time.perf_counter() - result_entered_at >= 3.0:
+            _result_duration = 2.0 if _final_round else 3.0
+            if time.perf_counter() - result_entered_at >= _result_duration:
                 result_entered_at = None
                 if sess.mode != Mode.SOLO and max(sess.scores) >= WIN_SCORE:
                     sess.state = State.VICTORY
@@ -1028,7 +1040,9 @@ def main_v2():
                             prompt_char=sess.prompt_char, online_wins=sess.online_wins,
                             pressed_display=sess.pressed_display)
             elif st == State.RESULT:
-                if result_entered_at is not None:
+                if _final_round:
+                    _cd = None
+                elif result_entered_at is not None:
                     _t = quit_confirm_at if quit_confirm else time.perf_counter()
                     _cd = max(1, math.ceil(3.0 - (_t - result_entered_at)))
                 else:
@@ -1053,10 +1067,13 @@ def main_v2():
             elif st == State.TIMEOUT:
                 render_timeout(surf, fonts)
             elif st == State.VICTORY:
+                _vic_text = (victory_entered_at is not None and
+                             time.perf_counter() - victory_entered_at >= 1.0)
                 render_victory(surf, fonts, sess.scores, p1l, p2l,
                                is_online=sess.mode == Mode.ONLINE,
                                rematch_voted=rematch_voted,
-                               opponent_declined=sess.rematch_declined)
+                               opponent_declined=sess.rematch_declined,
+                               show_text=_vic_text)
             elif st == State.SETTINGS:
                 render_settings(surf, fonts, sess.settings, settings_selected, name_editing)
             elif st == State.DATA:

@@ -137,6 +137,7 @@ class SoundManager:
         self.gunshot = _load_sfx("gunshot", _make_gunshot, gain=1.15)
         self.gunshot.set_volume(0.6)
         self.ping    = _load_sfx("ping",    _make_ping)
+        self.bell    = _load_sfx("bell",    _make_ping)
 
     # ── SFX ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,10 @@ class SoundManager:
     def play_ping(self):
         if self._s.sound_on:
             self.ping.play()
+
+    def play_bell(self):
+        if self._s.sound_on:
+            self.bell.play()
 
     # ── Ambient ───────────────────────────────────────────────────────────────
 
