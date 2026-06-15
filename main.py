@@ -367,6 +367,7 @@ def _poll_network(net: NetworkClient, sess: Session,
             names = msg.get("names", {})
             opp_idx = str(1 - (sess.player_idx or 0))
             sess.opponent_name = names.get(opp_idx, "OPPONENT")
+            sess.scores = [0, 0]
             sess.reset_round()
             sess.state = State.MATCH_INTRO
 
@@ -778,7 +779,6 @@ def main_v2():
                     ch = event.unicode.upper()
                     if sess.mode == Mode.ONLINE:
                         if ch and not online_fired:  # ignore bare modifier keys; only fire once
-                            sess.pressed_display[sess.player_idx or 0] = ch
                             if ch == sess.prompt_char:
                                 t_ms = int((time.perf_counter() - sess.draw_time) * 1000) \
                                        if sess.draw_time else 0

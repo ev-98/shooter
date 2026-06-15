@@ -199,17 +199,18 @@ async def handler(websocket):
 
             elif t == "fire" and room is not None and player_idx is not None:
                 key = msg.get("key", "")
-                if key:
+                arrival_time = time.perf_counter()
+                if key and room.state in ("draw", "ready") and player_idx not in room.fires:
                     await room.broadcast({"type": "key_pressed", "player": player_idx, "key": key})
                 await room.handle_fire(
                     player_idx,
                     client_time_ms=msg.get("client_time_ms"),
-                    arrival_time=time.perf_counter(),
+                    arrival_time=arrival_time,
                 )
 
             elif t == "misfire" and room is not None and player_idx is not None:
                 key = msg.get("key", "")
-                if key:
+                if key and room.state in ("ready", "draw"):
                     await room.broadcast({"type": "key_pressed", "player": player_idx, "key": key})
                 await room.handle_misfire(player_idx)
 
