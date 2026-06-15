@@ -652,6 +652,8 @@ def main_v2():
                 # Any key skips the splash
                 if not splash_done:
                     splash_done = True
+                    snd.play_bell()
+                    snd.start_wind()
                     continue
 
                 # Mode select screen takes priority
