@@ -1,6 +1,7 @@
 from __future__ import annotations
 """All pygame rendering. No game logic here."""
 import math
+import random as _rng
 import pygame
 
 # ── Palette ──────────────────────────────────────────────────────────────────
@@ -23,6 +24,47 @@ CURSOR_COL = (255, 200,  50)
 CACTUS     = ( 40,  90,  20)
 P1_COL     = (255,   0,   0)   # red for P1 in local
 P2_COL     = (  0,   0, 255)   # blue for P2 in local
+
+# ── Day/night cycle ───────────────────────────────────────────────────────────
+_CYCLE_MS  = 240_000   # full cycle in ms (4 minutes)
+_DAY_START = 0.22      # sun rises above horizon
+_DAY_END   = 0.78      # sun sets below horizon
+
+# Keyframes: (t, sky_top, sky_bot, ground, dirt, cactus_col)
+_DAY_KEYS = [
+    (0.00, ( 8,  5, 30), (12,  8, 45), (25, 15,  8), (35, 22, 10), (15, 38,  8)),
+    (0.15, (60, 18, 55), (120, 35, 65),(38, 22, 10), (52, 32, 13), (20, 50, 10)),
+    (0.25, (195,72, 18), (240,125, 40),(60, 38, 14), (80, 52, 18), (32, 72, 16)),
+    (0.38, (205,92, 24), (238,148, 47),(76, 47, 17), (98, 62, 23), (37, 82, 18)),
+    (0.50, (210,100,30), (240,160, 50),(90, 55, 20), (120,75, 30), (40, 90, 20)),
+    (0.62, (200,85, 22), (235,140, 42),(82, 50, 18), (108,68, 26), (38, 82, 18)),
+    (0.75, (155,42, 14), (205, 78, 28),(52, 30, 10), (70, 44, 14), (26, 58, 12)),
+    (0.85, (50, 14, 42), ( 90, 28, 60),(32, 20,  8), (45, 28, 10), (18, 44,  9)),
+    (1.00, ( 8,  5, 30), (12,  8, 45), (25, 15,  8), (35, 22, 10), (15, 38,  8)),
+]
+
+def _lerp_col(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+def _day_palette():
+    """Interpolate keyframes → (sky_top, sky_bot, ground, dirt, cactus_col)."""
+    t = _day_t()
+    for i in range(len(_DAY_KEYS) - 1):
+        t0, t1 = _DAY_KEYS[i][0], _DAY_KEYS[i + 1][0]
+        if t0 <= t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return tuple(_lerp_col(_DAY_KEYS[i][j], _DAY_KEYS[i + 1][j], f)
+                         for j in range(1, 6))
+    return tuple(_DAY_KEYS[-1][j] for j in range(1, 6))
+
+_CYCLE_OFFSET = int(_CYCLE_MS * 0.50)  # start at high noon
+
+def _day_t():
+    return ((pygame.time.get_ticks() + _CYCLE_OFFSET) % _CYCLE_MS) / _CYCLE_MS
+
+_star_rng  = _rng.Random(2847)
+_STARS     = [(_star_rng.random(), _star_rng.random() * 0.85) for _ in range(55)]
+_STAR_BIG  = {i for i in range(55) if i % 3 == 0}
 
 # ── Pixel scale for sprites ───────────────────────────────────────────────────
 PX = 5   # screen pixels per logical pixel
@@ -77,38 +119,73 @@ def draw_cowboy(surf: pygame.Surface, cx: int, cy: int, facing_right: bool,
                 pygame.draw.rect(surf, col, (ox + rx * PX, extra_y, PX, PX))
 
 
-def draw_cactus(surf: pygame.Surface, x: int, y: int, h: int = 60):
+def draw_cactus(surf: pygame.Surface, x: int, y: int, h: int = 60, col=None):
     """Draw a pixel cactus silhouette."""
+    c = col if col is not None else CACTUS
     w = PX * 2
-    pygame.draw.rect(surf, CACTUS, (x - w // 2, y - h, w, h))
+    pygame.draw.rect(surf, c, (x - w // 2, y - h, w, h))
     arm_y = y - h * 2 // 3
-    pygame.draw.rect(surf, CACTUS, (x - w * 3, arm_y - h // 4, w * 3, w))
-    pygame.draw.rect(surf, CACTUS, (x - w * 3, arm_y - h // 2, w, h // 4))
-    pygame.draw.rect(surf, CACTUS, (x + w // 2, arm_y - h // 4, w * 3, w))
-    pygame.draw.rect(surf, CACTUS, (x + w * 5 // 2, arm_y - h // 2, w, h // 4))
+    pygame.draw.rect(surf, c, (x - w * 3, arm_y - h // 4, w * 3, w))
+    pygame.draw.rect(surf, c, (x - w * 3, arm_y - h // 2, w, h // 4))
+    pygame.draw.rect(surf, c, (x + w // 2, arm_y - h // 4, w * 3, w))
+    pygame.draw.rect(surf, c, (x + w * 5 // 2, arm_y - h // 2, w, h // 4))
 
 
 def draw_bg(surf: pygame.Surface, flash: float = 0.0):
-    """Render the western background. flash: 0–1 white flash intensity."""
+    """Render the western background with animated day/night cycle."""
     W, H = surf.get_size()
     horizon = int(H * 0.62)
+    t = _day_t()
+    sky_top, sky_bot, ground_col, dirt_col, cactus_col = _day_palette()
 
-    # Sky gradient (two rects approximation)
-    surf.fill(SKY_TOP, (0, 0, W, horizon // 2))
-    surf.fill(SKY_BOT, (0, horizon // 2, W, horizon - horizon // 2))
+    # Sky (two-band gradient)
+    surf.fill(sky_top, (0, 0, W, horizon // 2))
+    surf.fill(sky_bot, (0, horizon // 2, W, horizon - horizon // 2))
 
-    # Sun
-    pygame.draw.circle(surf, SUN, (W // 2, horizon // 2 - 20), 28)
+    # Stars — visible during night/twilight, fade near dawn/dusk
+    if t < 0.20 or t > 0.80:
+        if t < 0.20:
+            star_alpha = 1.0 if t < 0.12 else 1.0 - (t - 0.12) / 0.08
+        else:
+            star_alpha = 1.0 if t > 0.88 else (t - 0.80) / 0.08
+        sc = int(210 * star_alpha)
+        for idx, (xf, yf) in enumerate(_STARS):
+            sx = int(xf * W)
+            sy = int(yf * horizon)
+            sz = 2 if idx in _STAR_BIG else 1
+            pygame.draw.rect(surf, (sc, sc, min(255, sc + 30)), (sx, sy, sz, sz))
 
-    # Ground
-    surf.fill(GROUND, (0, horizon, W, H - horizon))
-    surf.fill(DIRT, (0, horizon, W, 8))
+    # Arc helper — semicircle centred on the horizon so endpoints land exactly
+    # at ground level; the ground rect painted below naturally clips both bodies.
+    arc_rx = W * 0.42
+    arc_ry = horizon * 0.80
 
-    # Cacti (decorative)
-    draw_cactus(surf, 80, horizon, 55)
-    draw_cactus(surf, W - 80, horizon, 65)
-    draw_cactus(surf, 180, horizon, 35)
-    draw_cactus(surf, W - 170, horizon, 42)
+    def _arc_pos(frac):
+        angle = math.pi * (1.0 - frac)
+        return (int(W / 2 + arc_rx * math.cos(angle)),
+                int(horizon - arc_ry * math.sin(angle)))
+
+    # Moon drawn first (behind sun) — arc offset by half cycle
+    moon_frac = ((t + 0.5) % 1.0 - _DAY_START) / (_DAY_END - _DAY_START)
+    mx, my = _arc_pos(moon_frac)
+    pygame.draw.circle(surf, (210, 218, 240), (mx, my), 20)
+
+    # Sun — always computed; ground clips it when below horizon
+    day_frac = (t - _DAY_START) / (_DAY_END - _DAY_START)
+    sun_x, sun_y = _arc_pos(day_frac)
+    noon_frac = max(0.0, math.sin(math.pi * day_frac))
+    sun_col = _lerp_col((255, 100, 20), (255, 230, 80), noon_frac)
+    pygame.draw.circle(surf, sun_col, (sun_x, sun_y), 28)
+
+    # Ground — painted after sun/moon so it clips both at the horizon
+    surf.fill(ground_col, (0, horizon, W, H - horizon))
+    surf.fill(dirt_col,   (0, horizon, W, 8))
+
+    # Cacti
+    draw_cactus(surf,  80,       horizon, 55, cactus_col)
+    draw_cactus(surf,  W - 80,   horizon, 65, cactus_col)
+    draw_cactus(surf,  180,      horizon, 35, cactus_col)
+    draw_cactus(surf,  W - 170,  horizon, 42, cactus_col)
 
     # Flash overlay
     if flash > 0.0:
