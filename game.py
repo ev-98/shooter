@@ -99,7 +99,7 @@ class Session:
         self.online_wins: int = 0
         self.pressed_display: list = ["", ""]  # key shown above each player after press
         self.rematch_declined: bool = False
-        self.online_ready_pending: bool = False  # server said "ready" before match intro finished
+        self.online_deferred_msgs: list = []  # round messages held back until match intro finishes
 
     def reset_round(self):
         self.last_times = {}

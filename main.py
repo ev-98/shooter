@@ -346,6 +346,66 @@ def _start_local_round(sess: Session):
     sess.state = State.READY
 
 
+# Round-progression messages — these advance sess.state and must not land
+# before the client's local "FIRST TO 10" intro animation finishes, or the
+# round appears to skip straight past the READY suspense beat.
+_ROUND_MSG_TYPES = {"ready", "draw", "false_start", "misfire", "cheat",
+                    "result", "timeout", "key_pressed"}
+
+
+def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient):
+    if t == "ready":
+        sess.reset_round()
+        sess.state = State.READY
+
+    elif t == "draw":
+        sess.prompt_char = msg.get("key")
+        sess.set_draw()
+
+    elif t == "false_start":
+        sess.false_start_player = msg["offender"]
+        sess.winner = msg["winner"]
+        if sess.winner is not None:
+            sess.scores[sess.winner % 2] += 1
+        sess.state = State.RESULT
+
+    elif t == "misfire":
+        sess.misfire_player = msg["offender"]
+        sess.winner = msg["winner"]
+        if sess.winner is not None:
+            sess.scores[sess.winner % 2] += 1
+        sess.state = State.RESULT
+
+    elif t == "cheat":
+        sess.cheat_player = msg["offender"]
+        sess.winner = msg["winner"]
+        if sess.winner is not None:
+            sess.scores[sess.winner % 2] += 1
+        sess.state = State.RESULT
+
+    elif t == "result":
+        sess.winner = msg["winner"]
+        sess.last_times = {int(k): v for k, v in msg["times"].items()}
+        if sess.winner is not None:
+            sess.scores[sess.winner % 2] += 1
+        # Derive pressed key for any player whose fire was recorded.
+        # Falls back gracefully when the server doesn't relay key_pressed.
+        if sess.prompt_char:
+            for p in sess.last_times:
+                if not sess.pressed_display[p]:
+                    sess.pressed_display[p] = sess.prompt_char
+        sess.state = State.RESULT
+
+    elif t == "timeout":
+        sess.state = State.TIMEOUT
+
+    elif t == "key_pressed":
+        player = msg.get("player")
+        key = msg.get("key", "")
+        if player is not None and key:
+            sess.pressed_display[player] = key
+
+
 def _poll_network(net: NetworkClient, sess: Session,
                   online_phase: str, join_code_buf: str, room_code: str,
                   online_phase_ref: list | None = None):
@@ -369,67 +429,21 @@ def _poll_network(net: NetworkClient, sess: Session,
             sess.opponent_name = names.get(opp_idx, "OPPONENT")
             sess.scores = [0, 0]
             sess.reset_round()
+            sess.online_deferred_msgs = []
             sess.state = State.MATCH_INTRO
 
-        elif t == "ready":
+        elif t in _ROUND_MSG_TYPES:
             if sess.state == State.MATCH_INTRO:
                 # Don't cut the "FIRST TO 10" intro short — the server starts
-                # the round immediately after "start", often in the same
-                # network batch. Apply it once the local intro timer ends.
-                sess.online_ready_pending = True
+                # the round (and its own suspense timer) immediately after
+                # "start", often in the same network batch. Hold onto these
+                # and replay them once the local intro timer ends.
+                sess.online_deferred_msgs.append((t, msg))
             else:
-                sess.reset_round()
-                sess.state = State.READY
-
-        elif t == "draw":
-            sess.prompt_char = msg.get("key")
-            sess.set_draw()
+                _apply_round_msg(t, msg, sess, net)
 
         elif t == "fire":
             net.send({"type": "fire"})
-
-        elif t == "false_start":
-            sess.false_start_player = msg["offender"]
-            sess.winner = msg["winner"]
-            if sess.winner is not None:
-                sess.scores[sess.winner % 2] += 1
-            sess.state = State.RESULT
-
-        elif t == "misfire":
-            sess.misfire_player = msg["offender"]
-            sess.winner = msg["winner"]
-            if sess.winner is not None:
-                sess.scores[sess.winner % 2] += 1
-            sess.state = State.RESULT
-
-        elif t == "cheat":
-            sess.cheat_player = msg["offender"]
-            sess.winner = msg["winner"]
-            if sess.winner is not None:
-                sess.scores[sess.winner % 2] += 1
-            sess.state = State.RESULT
-
-        elif t == "result":
-            sess.winner = msg["winner"]
-            sess.last_times = {int(k): v for k, v in msg["times"].items()}
-            if sess.winner is not None:
-                sess.scores[sess.winner % 2] += 1
-            # Derive pressed key for any player whose fire was recorded.
-            # Falls back gracefully when the server doesn't relay key_pressed.
-            if sess.prompt_char:
-                for p in sess.last_times:
-                    if not sess.pressed_display[p]:
-                        sess.pressed_display[p] = sess.prompt_char
-            sess.state = State.RESULT
-
-        elif t == "timeout":
-            sess.state = State.TIMEOUT
-
-        elif t == "key_pressed":
-            player = msg.get("player")
-            key = msg.get("key", "")
-            if player is not None and key:
-                sess.pressed_display[player] = key
 
         elif t == "rematch_vote":
             pass  # server sends "start" when both votes arrive; tracked for UI by rematch_voted
@@ -988,10 +1002,10 @@ def main_v2():
         if sess.state == State.MATCH_INTRO and not quit_confirm:
             if time.perf_counter() >= match_intro_until:
                 if sess.mode == Mode.ONLINE:
-                    if sess.online_ready_pending:
-                        sess.online_ready_pending = False
-                        sess.reset_round()
-                        sess.state = State.READY
+                    if sess.online_deferred_msgs:
+                        deferred, sess.online_deferred_msgs = sess.online_deferred_msgs, []
+                        for dt, dmsg in deferred:
+                            _apply_round_msg(dt, dmsg, sess, net)
                     else:
                         sess.state = State.LOBBY
                 else:
