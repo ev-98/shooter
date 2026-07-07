@@ -372,8 +372,14 @@ def _poll_network(net: NetworkClient, sess: Session,
             sess.state = State.MATCH_INTRO
 
         elif t == "ready":
-            sess.reset_round()
-            sess.state = State.READY
+            if sess.state == State.MATCH_INTRO:
+                # Don't cut the "FIRST TO 10" intro short — the server starts
+                # the round immediately after "start", often in the same
+                # network batch. Apply it once the local intro timer ends.
+                sess.online_ready_pending = True
+            else:
+                sess.reset_round()
+                sess.state = State.READY
 
         elif t == "draw":
             sess.prompt_char = msg.get("key")
@@ -982,7 +988,12 @@ def main_v2():
         if sess.state == State.MATCH_INTRO and not quit_confirm:
             if time.perf_counter() >= match_intro_until:
                 if sess.mode == Mode.ONLINE:
-                    sess.state = State.LOBBY
+                    if sess.online_ready_pending:
+                        sess.online_ready_pending = False
+                        sess.reset_round()
+                        sess.state = State.READY
+                    else:
+                        sess.state = State.LOBBY
                 else:
                     _start_local_round(sess)
                     draw_trigger_ref[0] = reset_draw_timer()

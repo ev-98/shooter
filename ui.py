@@ -542,7 +542,6 @@ def render_result(surf: pygame.Surface, fonts: dict, mode,
     if is_online:
         if countdown is not None:
             pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 40)
-        pixel_text(surf, "ESC  quit", fonts["small"], TEXT_DIM, W // 2, H - 20)
     else:
         if countdown is not None:
             pixel_text(surf, f"NEXT ROUND IN {countdown}...", fonts["small"], TEXT_DIM, W // 2, H - 50)

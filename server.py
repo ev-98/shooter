@@ -223,6 +223,11 @@ async def handler(websocket):
                     samples.append(rtt_ms)
                     room.player_rtt[player_idx] = min(samples)
 
+            elif t == "rematch" and room is not None and room.state == "done":
+                # Host requesting the next round within the same match
+                # (not a full rematch after match victory).
+                asyncio.create_task(room.start_round())
+
             elif t == "rematch_vote" and room is not None and player_idx is not None:
                 room.rematch_votes.add(player_idx)
                 await room.broadcast({"type": "rematch_vote", "player": player_idx})
