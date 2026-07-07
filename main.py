@@ -25,6 +25,7 @@ import pygame
 
 from client import NetworkClient
 from game import Mode, Session, Settings, State, WIN_SCORE, load_save, write_save
+from paths import resource_path
 from server import start_background_server
 from sounds import SoundManager
 from ui import (
@@ -82,7 +83,7 @@ def main():
     surf  = pygame.display.set_mode((W, H))
     pygame.display.set_caption(TITLE)
     try:
-        pygame.display.set_icon(pygame.image.load("icon.png"))
+        pygame.display.set_icon(pygame.image.load(resource_path("icon.png")))
     except Exception:
         pass
     clock = pygame.time.Clock()
@@ -605,7 +606,7 @@ def main_v2():
     surf  = pygame.display.set_mode((W, H))
     pygame.display.set_caption(TITLE)
     try:
-        pygame.display.set_icon(pygame.image.load("icon.png"))
+        pygame.display.set_icon(pygame.image.load(resource_path("icon.png")))
     except Exception:
         pass
     clock = pygame.time.Clock()

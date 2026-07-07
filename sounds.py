@@ -7,8 +7,10 @@ import wave
 
 import pygame
 
+from paths import resource_path
+
 _SR  = 44100
-_DIR = os.path.join(os.path.dirname(__file__), "sounds")
+_DIR = resource_path("sounds")
 _EXTS = (".wav", ".ogg", ".mp3")
 
 

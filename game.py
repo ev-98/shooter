@@ -12,7 +12,17 @@ from enum import Enum, auto
 from dotenv import load_dotenv
 load_dotenv()
 
-SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
+from paths import user_data_dir
+
+SAVE_PATH = os.path.join(user_data_dir(), "save.json")
+_LEGACY_SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
+if not os.path.exists(SAVE_PATH) and os.path.exists(_LEGACY_SAVE_PATH):
+    try:
+        import shutil
+        shutil.copy(_LEGACY_SAVE_PATH, SAVE_PATH)
+    except OSError:
+        pass
+
 _SAVE_KEY = os.environ.get("SAVE_HMAC_KEY", "").encode()
 
 def _sign(data: dict) -> str:

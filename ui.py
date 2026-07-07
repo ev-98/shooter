@@ -1,8 +1,11 @@
 from __future__ import annotations
 """All pygame rendering. No game logic here."""
 import math
+import os
 import random as _rng
 import pygame
+
+from paths import resource_path
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 SKY_TOP    = (210, 100,  30)
@@ -690,9 +693,14 @@ def render_data(surf: pygame.Surface, fonts: dict,
 def make_fonts() -> dict:
     """Return the font dict used by all renderers."""
     pygame.font.init()
-    # Prefer a bitmap-style monospace; fall back to any mono
-    candidates = ["Courier New", "Courier", "monospace"]
-    name = pygame.font.match_font(" ".join(candidates)) or ""
+    # Bundled font wins (guarantees identical look in a packaged build);
+    # else fall back to whatever monospace the host OS has installed.
+    bundled = resource_path("fonts", "mono.ttf")
+    if os.path.exists(bundled):
+        name = bundled
+    else:
+        candidates = ["Courier New", "Courier", "monospace"]
+        name = pygame.font.match_font(" ".join(candidates)) or ""
     return {
         "big":   pygame.font.Font(name or None, 48),
         "score": pygame.font.Font(name or None, 36),
