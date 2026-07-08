@@ -13,6 +13,9 @@ _SR  = 44100
 _DIR = resource_path("sounds")
 _EXTS = (".wav", ".ogg", ".mp3")
 
+_MUSIC_FADE_IN_MS  = 2000
+_MUSIC_FADE_OUT_MS = 400
+
 
 def _find(base: str) -> str | None:
     for ext in _EXTS:
@@ -141,6 +144,16 @@ class SoundManager:
         self.ping    = _load_sfx("ping",    _make_ping)
         self.bell    = _load_sfx("bell",    _make_ping)
 
+        music_path = _find("dont_look_back")
+        self._music_loaded = False
+        if music_path:
+            try:
+                pygame.mixer.music.load(music_path)
+                pygame.mixer.music.set_volume(0.5)
+                self._music_loaded = True
+            except pygame.error:
+                pass
+
     # ── SFX ──────────────────────────────────────────────────────────────────
 
     def play_blip(self):
@@ -193,5 +206,19 @@ class SoundManager:
         else:
             self.stop_wind()
 
+    def start_music(self):
+        """Loop the background track. Idempotent — no-op if already playing."""
+        if not self._s.music_on or not self._music_loaded:
+            return
+        if not pygame.mixer.music.get_busy():
+            pygame.mixer.music.play(loops=-1, fade_ms=_MUSIC_FADE_IN_MS)
+
+    def stop_music(self):
+        if self._music_loaded and pygame.mixer.music.get_busy():
+            pygame.mixer.music.fadeout(_MUSIC_FADE_OUT_MS)
+
     def on_music_toggle(self):
-        pass  # placeholder for future music track
+        if self._s.music_on:
+            self.start_music()
+        else:
+            self.stop_music()

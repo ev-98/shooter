@@ -353,6 +353,15 @@ def _start_local_round(sess: Session):
 _ROUND_MSG_TYPES = {"ready", "draw", "false_start", "misfire", "cheat",
                     "result", "timeout", "key_pressed"}
 
+# Screens where background music plays; everything else is an active game
+# state (round in progress) where it cuts out.
+_MENU_MUSIC_STATES = {State.MENU, State.ONLINE_SETUP, State.SETTINGS,
+                      State.DATA, State.LOBBY, State.VICTORY}
+
+# Gap after a bell rings (splash intro / victory screen) before music fades
+# in, so the bell always gets a moment to play by itself first.
+MUSIC_AFTER_BELL_DELAY = 2.0
+
 
 def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=None):
     if t == "ready":
@@ -649,6 +658,7 @@ def main_v2():
     online_fired       = False  # prevents sending more than one fire/misfire per round
     rematch_voted      = False  # local player pressed SPACE on victory screen
     bell_pending_at:  float | None = None
+    music_pending_at: float | None = None  # lets the splash bell ring alone before music fades in
     local_grace_deadline: float | None = None  # 1 s window after first LOCAL fire
     quit_confirm       = False
     quit_confirm_at    = 0.0
@@ -679,6 +689,7 @@ def main_v2():
                     splash_done = True
                     snd.play_bell()
                     snd.start_wind()
+                    music_pending_at = time.perf_counter() + MUSIC_AFTER_BELL_DELAY
                     continue
 
                 # Mode select screen takes priority
@@ -966,6 +977,9 @@ def main_v2():
                 victory_entered_at = time.perf_counter()
                 if sess.mode != Mode.SOLO:
                     bell_pending_at = victory_entered_at + 1.0
+                    music_pending_at = bell_pending_at + MUSIC_AFTER_BELL_DELAY
+                else:
+                    snd.start_music()
                 if sess.mode == Mode.ONLINE:
                     my = sess.player_idx or 0
                     if sess.scores[my] > sess.scores[1 - my]:
@@ -983,6 +997,13 @@ def main_v2():
                 snd.start_wind()
             elif sess.state in (State.DRAW, State.RESULT, State.TIMEOUT, State.VICTORY):
                 snd.stop_wind()
+            if splash_done:
+                # VICTORY is handled by its own bell-then-music delay above —
+                # don't let this immediately override that with an early start.
+                if sess.state in _MENU_MUSIC_STATES and sess.state != State.VICTORY:
+                    snd.start_music()
+                elif sess.state not in _MENU_MUSIC_STATES:
+                    snd.stop_music()
             if sess.state == State.DRAW:
                 snd.play_ping()
             prev_state = sess.state
@@ -997,11 +1018,20 @@ def main_v2():
                 splash_done = True
                 snd.play_bell()
                 snd.start_wind()
+                music_pending_at = time.perf_counter() + MUSIC_AFTER_BELL_DELAY
 
         # Bell on match intro text appear
         if bell_pending_at is not None and time.perf_counter() >= bell_pending_at:
             snd.play_bell()
             bell_pending_at = None
+
+        # Delayed music fade-in (splash intro / victory bell), held back so the
+        # bell rings alone first. Guard against firing if the state has since
+        # moved on to an active game state.
+        if music_pending_at is not None and time.perf_counter() >= music_pending_at:
+            if sess.state in _MENU_MUSIC_STATES:
+                snd.start_music()
+            music_pending_at = None
 
         # Match intro auto-advance after 2 seconds
         if sess.state == State.MATCH_INTRO and not quit_confirm:
