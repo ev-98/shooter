@@ -23,6 +23,16 @@ RTT_TOLERANCE_MS  = 50   # extra buffer for clock drift / jitter
 N_RTT_SAMPLES     = 5    # pings per player; minimum of all samples is used
 RTT_PING_INTERVAL = 0.1  # seconds between pings
 
+# Client's fixed "FIRST TO N" MATCH_INTRO splash lasts 3.0s (main.py), timed
+# from the moment it *receives* "start". Our own delay is timed from the
+# moment we *send* "start", so it must stay comfortably under 3.0s — leaving
+# margin for one-way network latency — or "ready" can arrive after the
+# client's local timer already expired, flashing an empty LOBBY frame instead
+# of a clean transition. Still safely longer than any realistic latency, and
+# the round's actual suspense (1.5-5s) only starts counting once "ready" goes
+# out, so "draw" still can't land until well after the intro has finished.
+MATCH_INTRO_DELAY = 2.5
+
 
 def gen_code() -> str:
     code = ''.join(random.choices(string.ascii_uppercase, k=4))
@@ -59,7 +69,10 @@ class Room:
             return_exceptions=True,
         )
 
-    async def start_round(self):
+    async def start_round(self, after_intro: bool = False):
+        if after_intro:
+            await asyncio.sleep(MATCH_INTRO_DELAY)
+
         self.state = "ready"
         self.fires = {}
         self.draw_time = None
@@ -196,7 +209,7 @@ async def handler(websocket):
                 await websocket.send(json.dumps({"type": "joined", "code": code}))
                 await room.broadcast({"type": "start", "names": room.player_names})
                 asyncio.create_task(room.measure_rtt())
-                asyncio.create_task(room.start_round())
+                asyncio.create_task(room.start_round(after_intro=True))
 
             elif t == "fire" and room is not None and player_idx is not None:
                 key = msg.get("key", "")
@@ -235,7 +248,7 @@ async def handler(websocket):
                     room.rematch_votes.clear()
                     await room.broadcast({"type": "start", "names": room.player_names})
                     room.state = "waiting"
-                    asyncio.create_task(room.start_round())
+                    asyncio.create_task(room.start_round(after_intro=True))
 
     finally:
         if room and websocket in room.players:
