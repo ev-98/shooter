@@ -86,7 +86,7 @@ class Room:
                           client_time_ms: float | None = None,
                           arrival_time: float | None = None):
         if self.state == "ready":
-            self.state = "false_start"
+            self.state = "done"
             winner = 1 - player_idx
             await self.broadcast({
                 "type": "false_start",
