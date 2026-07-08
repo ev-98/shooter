@@ -354,7 +354,7 @@ _ROUND_MSG_TYPES = {"ready", "draw", "false_start", "misfire", "cheat",
                     "result", "timeout", "key_pressed"}
 
 
-def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient):
+def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=None):
     if t == "ready":
         sess.reset_round()
         sess.state = State.READY
@@ -405,11 +405,15 @@ def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient):
         key = msg.get("key", "")
         if player is not None and key:
             sess.pressed_display[player] = key
+            # Only the opponent's shot needs a sound here — our own key press
+            # already played the gunshot immediately, locally, on keydown.
+            if snd is not None and player != sess.player_idx:
+                snd.play_gunshot()
 
 
 def _poll_network(net: NetworkClient, sess: Session,
                   online_phase: str, join_code_buf: str, room_code: str,
-                  online_phase_ref: list | None = None):
+                  online_phase_ref: list | None = None, snd=None):
     """Consume all pending network messages."""
     while True:
         msg = net.poll()
@@ -441,7 +445,7 @@ def _poll_network(net: NetworkClient, sess: Session,
                 # and replay them once the local intro timer ends.
                 sess.online_deferred_msgs.append((t, msg))
             else:
-                _apply_round_msg(t, msg, sess, net)
+                _apply_round_msg(t, msg, sess, net, snd)
 
         elif t == "fire":
             net.send({"type": "fire"})
@@ -943,7 +947,7 @@ def main_v2():
         # Network polling
         if sess.mode == Mode.ONLINE or op in (
                 "host_connecting", "join_connecting", "join_wait", "host_wait"):
-            _poll_network(net, sess, op, join_code_buf, sess.online_code, online_phase_ref)
+            _poll_network(net, sess, op, join_code_buf, sess.online_code, online_phase_ref, snd)
             if online_phase_ref[0] == op:
                 online_phase_ref[0] = _online_phase_sync(net, sess, op, join_code_buf)
             op = online_phase_ref[0]
@@ -1006,7 +1010,7 @@ def main_v2():
                     if sess.online_deferred_msgs:
                         deferred, sess.online_deferred_msgs = sess.online_deferred_msgs, []
                         for dt, dmsg in deferred:
-                            _apply_round_msg(dt, dmsg, sess, net)
+                            _apply_round_msg(dt, dmsg, sess, net, snd)
                     else:
                         sess.state = State.LOBBY
                 else:
