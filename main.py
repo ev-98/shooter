@@ -364,7 +364,8 @@ _MENU_MUSIC_STATES = {State.MENU, State.ONLINE_SETUP, State.SETTINGS,
 MUSIC_AFTER_BELL_DELAY = 2.0
 
 
-def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=None):
+def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=None,
+                     flash_ref: list | None = None):
     if t == "ready":
         sess.reset_round()
         sess.state = State.READY
@@ -406,6 +407,8 @@ def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=N
                 if not sess.pressed_display[p]:
                     sess.pressed_display[p] = sess.prompt_char
         sess.state = State.RESULT
+        if flash_ref is not None:
+            flash_ref[0] = 1.0
 
     elif t == "timeout":
         sess.state = State.TIMEOUT
@@ -423,7 +426,8 @@ def _apply_round_msg(t: str, msg: dict, sess: Session, net: NetworkClient, snd=N
 
 def _poll_network(net: NetworkClient, sess: Session,
                   online_phase: str, join_code_buf: str, room_code: str,
-                  online_phase_ref: list | None = None, snd=None):
+                  online_phase_ref: list | None = None, snd=None,
+                  flash_ref: list | None = None):
     """Consume all pending network messages."""
     while True:
         msg = net.poll()
@@ -455,7 +459,7 @@ def _poll_network(net: NetworkClient, sess: Session,
                 # and replay them once the local intro timer ends.
                 sess.online_deferred_msgs.append((t, msg))
             else:
-                _apply_round_msg(t, msg, sess, net, snd)
+                _apply_round_msg(t, msg, sess, net, snd, flash_ref)
 
         elif t == "fire":
             net.send({"type": "fire"})
@@ -643,6 +647,7 @@ def main_v2():
 
     draw_trigger_ref  = [None]     # mutable reference trick
     online_phase_ref  = ["choose"]
+    flash_ref         = [0.0]     # lets _apply_round_msg signal a flash back up
     join_code_buf     = ""
     cursor_tick       = 0
     flash_val         = 0.0
@@ -830,6 +835,7 @@ def main_v2():
                                        if sess.draw_time else 0
                                 net.send({"type": "fire", "client_time_ms": t_ms, "key": ch})
                                 snd.play_gunshot()
+                                flash_val = 1.0
                                 online_fired = True
                             else:
                                 net.send({"type": "misfire", "key": ch})
@@ -959,7 +965,11 @@ def main_v2():
         # Network polling
         if sess.mode == Mode.ONLINE or op in (
                 "host_connecting", "join_connecting", "join_wait", "host_wait"):
-            _poll_network(net, sess, op, join_code_buf, sess.online_code, online_phase_ref, snd)
+            _poll_network(net, sess, op, join_code_buf, sess.online_code, online_phase_ref, snd,
+                         flash_ref)
+            if flash_ref[0]:
+                flash_val = 1.0
+                flash_ref[0] = 0.0
             if online_phase_ref[0] == op:
                 online_phase_ref[0] = _online_phase_sync(net, sess, op, join_code_buf)
             op = online_phase_ref[0]
@@ -1041,7 +1051,10 @@ def main_v2():
                     if sess.online_deferred_msgs:
                         deferred, sess.online_deferred_msgs = sess.online_deferred_msgs, []
                         for dt, dmsg in deferred:
-                            _apply_round_msg(dt, dmsg, sess, net, snd)
+                            _apply_round_msg(dt, dmsg, sess, net, snd, flash_ref)
+                        if flash_ref[0]:
+                            flash_val = 1.0
+                            flash_ref[0] = 0.0
                     else:
                         sess.state = State.LOBBY
                 else:
