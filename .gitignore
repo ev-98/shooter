@@ -4,3 +4,6 @@ __pycache__/
 .vscode/
 save.json
 .env
+build/
+dist/
+*.spec.bak

@@ -28,6 +28,7 @@ from game import Mode, Session, Settings, State, WIN_SCORE, load_save, write_sav
 from paths import resource_path
 from server import start_background_server
 from sounds import SoundManager
+from version import APP_NAME
 from ui import (
     make_fonts,
     render_data,
@@ -49,7 +50,7 @@ from ui import (
 # ── Constants ─────────────────────────────────────────────────────────────────
 W, H       = 800, 500
 FPS        = 60
-TITLE      = "shooter"
+TITLE      = APP_NAME
 
 # Relay server — change to a hosted URL for internet play
 RELAY_URL  = os.environ.get("SERVER_URL", "ws://localhost:8765")

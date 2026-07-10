@@ -6,6 +6,7 @@ import random as _rng
 import pygame
 
 from paths import resource_path
+from version import VERSION
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 SKY_TOP    = (210, 100,  30)
@@ -238,7 +239,7 @@ def render_menu(surf: pygame.Surface, fonts: dict, tick: int, intro_fade: float 
                    W // 2, H // 2 + 20)
 
     if intro_fade >= 1.25:
-        pixel_text(surf, "v1.0", fonts["med"], TEXT_DIM, W // 2, H - 22)
+        pixel_text(surf, f"v{VERSION}", fonts["med"], TEXT_DIM, W // 2, H - 22)
 
     # Stepped black overlay — quantised to 8 levels for 8-bit feel
     if intro_fade < 1.0:

@@ -8,6 +8,8 @@ fall back to this file's own directory (the project root when run from source).
 import os
 import sys
 
+from version import APP_NAME
+
 
 def resource_path(*parts: str) -> str:
     """Path to a bundled, read-only asset (icon, sounds, fonts)."""
@@ -15,7 +17,7 @@ def resource_path(*parts: str) -> str:
     return os.path.join(base, *parts)
 
 
-def user_data_dir(app_name: str = "shooter") -> str:
+def user_data_dir(app_name: str = APP_NAME) -> str:
     """Writable per-user directory for save data; created if missing.
 
     App bundles/Program Files are read-only (or prompt for elevation) once

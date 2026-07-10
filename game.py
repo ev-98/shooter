@@ -23,7 +23,12 @@ if not os.path.exists(SAVE_PATH) and os.path.exists(_LEGACY_SAVE_PATH):
     except OSError:
         pass
 
-_SAVE_KEY = os.environ.get("SAVE_HMAC_KEY", "").encode()
+# Fallback used when SAVE_HMAC_KEY isn't set via env/.env (the case for
+# shipped builds, which don't bundle a .env). Not meant to be secret — any
+# key baked into a distributed binary can be extracted — just keeps save
+# signing consistent across installs so tampering isn't a no-op.
+_DEFAULT_SAVE_KEY = "f9cbf4aaa3c98f0f2abb1ce02af7f3a4e972c76cf926763b3101ffb6ab96b992"
+_SAVE_KEY = os.environ.get("SAVE_HMAC_KEY", _DEFAULT_SAVE_KEY).encode()
 
 def _sign(data: dict) -> str:
     payload = json.dumps(data, sort_keys=True).encode()
