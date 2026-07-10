@@ -695,17 +695,18 @@ def make_fonts() -> dict:
     """Return the font dict used by all renderers."""
     pygame.font.init()
     # Bundled font wins (guarantees identical look in a packaged build);
-    # else fall back to whatever monospace the host OS has installed.
+    # else explicitly use pygame's own bundled freesansbold.ttf, so the
+    # title screen renders identically on every platform instead of
+    # depending on whatever fonts happen to be installed on the host OS.
     bundled = resource_path("fonts", "mono.ttf")
     if os.path.exists(bundled):
         name = bundled
     else:
-        candidates = ["Courier New", "Courier", "monospace"]
-        name = pygame.font.match_font(" ".join(candidates)) or ""
+        name = os.path.join(os.path.dirname(pygame.__file__), pygame.font.get_default_font())
     return {
-        "big":   pygame.font.Font(name or None, 48),
-        "score": pygame.font.Font(name or None, 36),
-        "med":   pygame.font.Font(name or None, 28),
-        "hint":  pygame.font.Font(name or None, 22),
-        "small": pygame.font.Font(name or None, 18),
+        "big":   pygame.font.Font(name, 48),
+        "score": pygame.font.Font(name, 36),
+        "med":   pygame.font.Font(name, 28),
+        "hint":  pygame.font.Font(name, 22),
+        "small": pygame.font.Font(name, 18),
     }
