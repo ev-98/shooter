@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Hardened runtime entitlements for the notarized build.
+
+	PyInstaller-built apps bundle their own dylibs/extensions that are not
+	all signed by Apple, and pygame/SDL touch executable memory in ways the
+	default hardened-runtime restrictions block. Without these, the app
+	either fails notarization or crashes on launch on a Gatekeeper-enforced
+	Mac even though it notarizes fine.
+	-->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<true/>
+</dict>
+</plist>
