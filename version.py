@@ -5,4 +5,4 @@ Read by the UI (title-screen version label) and by build tooling
 Bump VERSION here before cutting a release.
 """
 APP_NAME = "shooter"
-VERSION  = "1.0.1"
+VERSION  = "1.0.2"
