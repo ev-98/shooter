@@ -77,11 +77,39 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           ditto -c -k --keepParent dist/shooter.app notarize.zip
-          xcrun notarytool submit notarize.zip \
+
+          SUBMISSION_ID=$(xcrun notarytool submit notarize.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --output-format json | jq -r '.id')
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # notarytool's own long-poll dies on any transient network blip and
+          # takes the whole job with it, even though Apple keeps processing
+          # the submission. Poll for completion with `wait` (which resumes
+          # against the existing submission instead of re-uploading) and
+          # retry on failure instead of giving up on the first hiccup.
+          for attempt in 1 2 3; do
+            if xcrun notarytool wait "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --timeout 30m; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Notarization did not complete after $attempt attempts"
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+              exit 1
+            fi
+            echo "notarytool wait failed on attempt $attempt, retrying in 30s..."
+            sleep 30
+          done
+
           xcrun stapler staple dist/shooter.app
           rm notarize.zip
 
