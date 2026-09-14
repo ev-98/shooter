@@ -9,6 +9,7 @@ Default port: 8765
 """
 import asyncio
 import json
+import os
 import random
 import string
 import threading
@@ -17,6 +18,11 @@ import time
 import websockets
 
 rooms: dict = {}
+
+# Simple global cap so a connection flood can't grow memory/task count
+# without bound. Generous for a 1v1 relay — real usage is nowhere near this.
+MAX_CONNECTIONS   = 500
+_connection_count = 0
 
 MIN_REACTION_MS   = 80   # below this is physically impossible for a human
 RTT_TOLERANCE_MS  = 50   # extra buffer for clock drift / jitter
@@ -178,11 +184,20 @@ class Room:
 
 
 async def handler(websocket):
+    global _connection_count
+    if _connection_count >= MAX_CONNECTIONS:
+        await websocket.close(code=1013, reason="server full")
+        return
+    _connection_count += 1
+
     player_idx = None
     room = None
     try:
         async for raw in websocket:
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue  # ignore malformed input rather than dropping the connection
             t = msg.get("type")
 
             if t == "create":
@@ -251,6 +266,7 @@ async def handler(websocket):
                     asyncio.create_task(room.start_round(after_intro=True))
 
     finally:
+        _connection_count -= 1
         if room and websocket in room.players:
             room.players.remove(websocket)
             if not room.players and room.code in rooms:
@@ -260,14 +276,19 @@ async def handler(websocket):
 
 
 def start_background_server(port: int = 8765):
-    """Start the relay server in a daemon thread. Safe to call multiple times."""
+    """Start the relay server in a daemon thread. Safe to call multiple times.
+
+    Localhost-only: this is the dev-mode embedded relay (two source-run
+    windows on the same machine), never the production listener — that's
+    _main(), run standalone behind Caddy on the droplet.
+    """
     def _run():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         async def _serve():
             try:
-                async with websockets.serve(handler, "0.0.0.0", port):
+                async with websockets.serve(handler, "127.0.0.1", port):
                     await asyncio.Future()
             except OSError:
                 pass  # port already in use — external relay is handling it
@@ -279,7 +300,12 @@ def start_background_server(port: int = 8765):
 
 
 async def _main():
-    host, port = "0.0.0.0", 8765
+    # Bound to localhost: in production this process sits behind Caddy,
+    # which terminates TLS on 443 and reverse-proxies to here. Set
+    # BIND_HOST=0.0.0.0 only if you're intentionally exposing this port
+    # directly (e.g. plain-ws local testing across a LAN).
+    host = os.environ.get("BIND_HOST", "127.0.0.1")
+    port = 8765
     print(f"Shootout server listening on ws://{host}:{port}")
     async with websockets.serve(handler, host, port):
         await asyncio.Future()

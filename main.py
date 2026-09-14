@@ -28,7 +28,7 @@ from game import Mode, Session, Settings, State, WIN_SCORE, load_save, write_sav
 from paths import resource_path
 from server import start_background_server
 from sounds import SoundManager
-from version import APP_NAME
+from version import APP_NAME, DEFAULT_RELAY_URL
 from ui import (
     make_fonts,
     render_data,
@@ -52,8 +52,9 @@ W, H       = 800, 500
 FPS        = 60
 TITLE      = APP_NAME
 
-# Relay server — change to a hosted URL for internet play
-RELAY_URL  = os.environ.get("SERVER_URL", "ws://localhost:8765")
+# Relay server. Defaults to the hosted production relay; override via
+# SERVER_URL (env or .env) for local dev against `python server.py`.
+RELAY_URL  = os.environ.get("SERVER_URL", DEFAULT_RELAY_URL)
 
 # Solo / local draw timer bounds (seconds)
 DRAW_MIN   = 1.5
@@ -618,7 +619,12 @@ def handle_mode_select_key(key, sess: Session, net: NetworkClient,
 
 def main_v2():
     """Full main loop with mode-select integrated cleanly."""
-    start_background_server()   # embedded relay; silently skips if port busy
+    if not getattr(sys, "_MEIPASS", None):
+        # Dev convenience only: with SERVER_URL=ws://localhost:8765 in .env,
+        # two source-run windows on the same machine can test ONLINE mode
+        # against each other without needing the hosted relay. Shipped
+        # (frozen) builds always use the hosted relay and never listen.
+        start_background_server()
     pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.init()
     surf  = pygame.display.set_mode((W, H))

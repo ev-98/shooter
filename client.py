@@ -15,8 +15,10 @@ import time
 import websockets
 from dotenv import load_dotenv
 
+from version import DEFAULT_RELAY_URL
+
 load_dotenv()
-_SERVER_URL = os.environ.get("SERVER_URL", "ws://164.92.79.212:8765")
+_SERVER_URL = os.environ.get("SERVER_URL", DEFAULT_RELAY_URL)
 
 
 class NetworkClient:
