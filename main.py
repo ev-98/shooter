@@ -19,12 +19,13 @@ import os
 import random
 import sys
 import time
+import traceback
 
 import pygame
 
 from client import NetworkClient
 from game import Mode, Session, State, WIN_SCORE, load_save, write_save
-from paths import resource_path
+from paths import resource_path, user_data_dir
 from server import start_background_server
 from sounds import SoundManager
 from version import APP_NAME, DEFAULT_RELAY_URL
@@ -901,5 +902,26 @@ def main_v2():
     sys.exit()
 
 
+def _log_crash(exc: BaseException) -> None:
+    """Write the traceback to a file so a crash isn't a silent black box.
+
+    PyInstaller builds run with console=False, so an unhandled exception
+    would otherwise just vanish with nothing for the player to report or
+    for us to debug.
+    """
+    log_path = os.path.join(user_data_dir(), "crash.log")
+    try:
+        with open(log_path, "a") as f:
+            f.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+    except OSError:
+        pass
+
+
 if __name__ == "__main__":
-    main_v2()
+    try:
+        main_v2()
+    except Exception as e:
+        _log_crash(e)
+        pygame.quit()
+        raise
