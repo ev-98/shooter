@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 """
-HIGH NOON SHOWDOWN
-==================
+SHOOTER
+=======
 Modes:
   LOCAL   — two players, same keyboard (A = P1, L = P2)
   SOLO    — one player vs the clock (SPACE)
@@ -14,7 +14,6 @@ Run the game:
 Run a server (for online mode):
     python server.py
 """
-import asyncio
 import math
 import os
 import random
@@ -24,7 +23,7 @@ import time
 import pygame
 
 from client import NetworkClient
-from game import Mode, Session, Settings, State, WIN_SCORE, load_save, write_save
+from game import Mode, Session, State, WIN_SCORE, load_save, write_save
 from paths import resource_path
 from server import start_background_server
 from sounds import SoundManager
@@ -78,243 +77,10 @@ def reset_draw_timer() -> float:
     return time.perf_counter() + random.uniform(DRAW_MIN, DRAW_MAX)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-def main():
-    pygame.init()
-    surf  = pygame.display.set_mode((W, H))
-    pygame.display.set_caption(TITLE)
-    try:
-        pygame.display.set_icon(pygame.image.load(resource_path("icon.png")))
-    except Exception:
-        pass
-    clock = pygame.time.Clock()
-    fonts = make_fonts()
-
-    sess   = Session()
-    net    = NetworkClient()
-    tick   = 0
-
-    # Local-only timing
-    draw_trigger: float | None = None   # perf_counter time to show DRAW
-
-    # Online setup sub-state
-    online_phase   = "choose"        # choose | host_wait | join_ip | join_code
-    join_ip        = "127.0.0.1"
-    join_code_buf  = ""
-    input_focus    = "ip"            # ip | code  (join screen)
-    cursor_tick    = 0
-
-    # Result flash
-    flash_val      = 0.0             # 0-1 white flash
-    mode_selected  = 0               # cursor in mode select screen
-
-    # ── Event loop ────────────────────────────────────────────────────────────
-    running = True
-    while running:
-        dt = clock.tick(FPS)
-        tick += 1
-        cursor_tick += 1
-
-        # ── Pygame events ─────────────────────────────────────────────────
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-            elif event.type == pygame.KEYDOWN:
-                k = event.key
-
-                # ── MENU ──────────────────────────────────────────────────
-                if sess.state == State.MENU:
-                    if k == pygame.K_RETURN:
-                        sess.state = State.MENU  # transition to mode select
-                        # Reuse MENU flag; switch manually:
-                        sess.state = _go_mode_select(sess)
-
-                # ── MODE SELECT ───────────────────────────────────────────
-                elif sess.state == State.MENU and False:  # placeholder
-                    pass
-
-                # We use a separate local variable for mode select screen
-                # since State.MENU doubles as the mode-select entry point.
-                # Handled below after state machine with explicit screen var.
-
-                # ── ONLINE SETUP ──────────────────────────────────────────
-                elif sess.state == State.ONLINE_SETUP:
-                    if online_phase == "choose":
-                        if k == pygame.K_h:
-                            net = NetworkClient()
-                            net.connect(join_ip)
-                            online_phase = "host_connecting"
-                        elif k == pygame.K_j:
-                            online_phase = "join_ip"
-                            input_focus = "ip"
-                            join_code_buf = ""
-                        elif k in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
-                            sess.state = State.MENU
-                            online_phase = "choose"
-
-                    elif online_phase in ("join_ip", "join_code"):
-                        if k == pygame.K_TAB:
-                            input_focus = "code" if input_focus == "ip" else "ip"
-                        elif k == pygame.K_RETURN:
-                            if input_focus == "ip":
-                                input_focus = "code"
-                            else:
-                                # Try to connect and join
-                                net = NetworkClient()
-                                net.connect(join_ip)
-                                online_phase = "join_connecting"
-                        elif k == pygame.K_BACKSPACE:
-                            if input_focus == "ip":
-                                join_ip = join_ip[:-1]
-                            else:
-                                join_code_buf = join_code_buf[:-1]
-                        elif k == pygame.K_ESCAPE:
-                            sess.state = State.MENU
-                            online_phase = "choose"
-                            sess.online_error = ""
-                        else:
-                            ch = event.unicode
-                            if input_focus == "ip" and ch in "0123456789.":
-                                if len(join_ip) < 21:
-                                    join_ip += ch
-                            elif input_focus == "code" and ch.isalpha():
-                                if len(join_code_buf) < 4:
-                                    join_code_buf += ch.upper()
-
-                    elif online_phase == "host_wait":
-                        if k == pygame.K_ESCAPE:
-                            net.close()
-                            sess.state = State.MENU
-                            online_phase = "choose"
-
-                # ── LOBBY ─────────────────────────────────────────────────
-                elif sess.state == State.LOBBY:
-                    if k == pygame.K_ESCAPE:
-                        net.close()
-                        sess.state = State.MENU
-                        online_phase = "choose"
-
-                # ── READY (local / solo) ───────────────────────────────────
-                elif sess.state == State.READY:
-                    if sess.mode != Mode.ONLINE:
-                        result = _handle_fire_key(k, sess)
-                        if result == "false_start":
-                            _do_false_start(sess, _key_to_player(k, sess))
-                        elif result == "ok":
-                            pass  # will be caught in state tick below
-
-                # ── DRAW (local / solo) ────────────────────────────────────
-                elif sess.state == State.DRAW:
-                    if sess.mode != Mode.ONLINE:
-                        result = _handle_fire_key(k, sess)
-                        if result == "ok":
-                            flash_val = 1.0
-                            num = 1 if sess.mode == Mode.SOLO else 2
-                            if sess.resolve_local_or_wait(num):
-                                sess.state = State.RESULT
-
-                # ── ONLINE DRAW ───────────────────────────────────────────
-                elif sess.state == State.DRAW and sess.mode == Mode.ONLINE:
-                    if k == pygame.K_SPACE:
-                        net.send({"type": "fire"})
-
-                # ── RESULT ────────────────────────────────────────────────
-                elif sess.state == State.RESULT:
-                    if k == pygame.K_r:
-                        if sess.mode == Mode.ONLINE:
-                            if sess.is_host:
-                                net.send({"type": "rematch"})
-                        else:
-                            _start_local_round(sess)
-                            draw_trigger = reset_draw_timer()
-                    elif k == pygame.K_ESCAPE:
-                        if sess.mode == Mode.ONLINE:
-                            net.close()
-                            online_phase = "choose"
-                        sess.state = State.MENU
-
-                # ── TIMEOUT ───────────────────────────────────────────────
-                elif sess.state == State.TIMEOUT:
-                    if k == pygame.K_r:
-                        _start_local_round(sess)
-                        draw_trigger = reset_draw_timer()
-                    elif k == pygame.K_ESCAPE:
-                        sess.state = State.MENU
-
-        # ── Mode-select screen (overlaid on MENU state) ────────────────────
-        # We use a two-level approach: State.MENU = either main menu or
-        # mode select. Track with a local variable.
-        # (Handled via _go_mode_select above; see render section.)
-
-        # ── Online fire key (DRAW state, online mode) ──────────────────────
-        # Needs to be outside the event loop for the online+draw branch.
-        if sess.state == State.DRAW and sess.mode == Mode.ONLINE:
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_SPACE]:
-                pass  # handled in event loop above to avoid repeat
-
-        # ── Local draw timer tick ──────────────────────────────────────────
-        if sess.state == State.READY and sess.mode != Mode.ONLINE:
-            if draw_trigger and time.perf_counter() >= draw_trigger:
-                sess.set_draw()
-                draw_trigger = None
-                flash_val = 0.0
-
-        # ── Online: handle network messages ───────────────────────────────
-        if sess.mode == Mode.ONLINE or online_phase in (
-                "host_connecting", "join_connecting", "host_wait"):
-            _poll_network(net, sess, online_phase, join_code_buf, sess.online_code)
-            # Sync back mutated online_phase
-            online_phase = _online_phase_sync(
-                net, sess, online_phase, join_code_buf)
-
-        # ── Solo: single-player resolve ────────────────────────────────────
-        if sess.state == State.DRAW and sess.mode == Mode.SOLO:
-            if 0 in sess.last_times:
-                sess.resolve_local_or_wait(1)
-                sess.state = State.RESULT
-                flash_val = 1.0
-
-        # ── Local 2P resolve ──────────────────────────────────────────────
-        if sess.state == State.DRAW and sess.mode == Mode.LOCAL:
-            if sess.resolve_local_or_wait(2):
-                sess.state = State.RESULT
-                flash_val = 1.0
-
-        # ── Flash decay ───────────────────────────────────────────────────
-        flash_val = max(0.0, flash_val - 0.04)
-
-        # ── Render ────────────────────────────────────────────────────────
-        p1l, p2l = player_labels(sess)
-        _render(surf, fonts, sess, tick, flash_val,
-                online_phase, join_ip, join_code_buf, input_focus,
-                cursor_tick, mode_selected, p1l, p2l)
-
-        pygame.display.flip()
-
-        # ── Mode select key handling (needs render to have run once) ───────
-        if sess.state == State.MENU:
-            # Peek at pressed keys for mode select navigation
-            pass  # handled via KEYDOWN events
-
-    net.close()
-    pygame.quit()
-    sys.exit()
-
-
 # ── State helpers ─────────────────────────────────────────────────────────────
 
 _in_mode_select = False   # module-level flag (single-file simplicity)
 _mode_select_idx = 0
-
-
-def _go_mode_select(sess: Session) -> State:
-    global _in_mode_select, _mode_select_idx
-    _in_mode_select = True
-    _mode_select_idx = 0
-    return State.MENU  # stay in MENU state, flag drives render
 
 
 def _handle_fire_key(key, sess: Session) -> str:
@@ -508,58 +274,6 @@ def _online_phase_sync(net: NetworkClient, sess: Session,
     if online_phase == "host_wait" and sess.online_code:
         return "host_wait"  # stay until opponent joins
     return online_phase
-
-
-# ── Render dispatcher ─────────────────────────────────────────────────────────
-
-def _render(surf, fonts, sess: Session, tick: int, flash: float,
-            online_phase: str, join_ip: str, join_code_buf: str,
-            input_focus: str, cursor_tick: int, mode_selected: int,
-            p1l: str, p2l: str):
-    global _in_mode_select, _mode_select_idx
-
-    st = sess.state
-
-    if st == State.MENU:
-        if _in_mode_select:
-            render_mode_select(surf, fonts, _mode_select_idx)
-            # Key handling for mode select
-            keys = pygame.key.get_pressed()
-            # (arrow keys handled via KEYDOWN below — see _handle_mode_select_keys)
-        else:
-            render_menu(surf, fonts, tick)
-
-    elif st == State.ONLINE_SETUP:
-        cursor_on = (cursor_tick // 30) % 2 == 0
-        phase_map = {
-            "host_connecting": "host_wait",
-            "join_connecting": "join_code",
-            "join_wait": "join_code",
-        }
-        display_phase = phase_map.get(online_phase, online_phase)
-        render_online_setup(surf, fonts, display_phase, join_code_buf,
-                            sess.online_error, sess.online_code, cursor_on)
-
-    elif st == State.LOBBY:
-        render_lobby(surf, fonts, tick)
-
-    elif st == State.READY:
-        render_ready(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l)
-
-    elif st == State.DRAW:
-        render_draw(surf, fonts, tick, sess.mode, sess.scores, p1l, p2l, flash)
-
-    elif st == State.RESULT:
-        render_result(surf, fonts, sess.mode, sess.winner,
-                      sess.false_start_player, sess.last_times,
-                      sess.scores, p1l, p2l,
-                      is_online=sess.mode == Mode.ONLINE,
-                      is_host=sess.is_host,
-                      flash=flash,
-                      cheat_player=sess.cheat_player)
-
-    elif st == State.TIMEOUT:
-        render_timeout(surf, fonts)
 
 
 # ── Mode-select key handler (called from main event loop) ─────────────────────

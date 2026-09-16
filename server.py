@@ -306,7 +306,7 @@ async def _main():
     # directly (e.g. plain-ws local testing across a LAN).
     host = os.environ.get("BIND_HOST", "127.0.0.1")
     port = 8765
-    print(f"Shootout server listening on ws://{host}:{port}")
+    print(f"shooter server listening on ws://{host}:{port}")
     async with websockets.serve(handler, host, port):
         await asyncio.Future()
 
