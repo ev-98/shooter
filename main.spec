@@ -14,6 +14,7 @@ Output:
     dist/shooter/        (Windows, Linux — run shooter/shooter[.exe])
     dist/shooter.app     (macOS)
 """
+import os
 import sys
 
 sys.path.insert(0, SPECPATH)
@@ -25,6 +26,20 @@ block_cipher = None
 
 hiddenimports = collect_submodules("websockets")
 
+# Steam redistributables (steam_appid.txt, the SteamworksPy native module,
+# Valve's own steam_api library) aren't committed to this repo — see
+# steam_integration.py for why — so they're bundled only when a dev has
+# dropped them next to main.spec for a Steam build. Their absence is the
+# normal case; regular builds just skip this.
+_steam_files = [
+    "steam_appid.txt",
+    "SteamworksPy64.dll", "SteamworksPy.dll",
+    "SteamworksPy.so", "SteamworksPy.dylib",
+    "steam_api64.dll", "steam_api.dll",
+    "libsteam_api.so", "libsteam_api.dylib",
+]
+steam_datas = [(f, ".") for f in _steam_files if os.path.exists(os.path.join(SPECPATH, f))]
+
 a = Analysis(
     ["main.py"],
     pathex=[SPECPATH],
@@ -32,7 +47,7 @@ a = Analysis(
     datas=[
         ("sounds", "sounds"),
         ("icon.png", "."),
-    ],
+    ] + steam_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

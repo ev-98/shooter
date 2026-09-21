@@ -7,3 +7,16 @@ save.json
 build/
 dist/
 *.spec.bak
+
+# Steam redistributables — Valve's SDK license doesn't allow committing
+# these to a repo; each dev/CI runner drops them in locally. See
+# steam_integration.py for what goes here and where to get it.
+steam_appid.txt
+SteamworksPy64.dll
+SteamworksPy.dll
+SteamworksPy.so
+SteamworksPy.dylib
+steam_api64.dll
+steam_api.dll
+libsteam_api.so
+libsteam_api.dylib

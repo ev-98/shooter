@@ -28,6 +28,7 @@ from game import Mode, Session, State, WIN_SCORE, load_save, write_save
 from paths import resource_path, user_data_dir
 from server import start_background_server
 from sounds import SoundManager
+from steam_integration import SteamManager
 from version import APP_NAME, DEFAULT_RELAY_URL
 from ui import (
     make_fonts,
@@ -353,9 +354,14 @@ def main_v2():
 
     sess   = Session()
     net    = NetworkClient()
+    steam  = SteamManager()
 
     _save = load_save()
-    sess.settings.player_name = _save.get("player_name", "PLAYER")
+    _saved_name = _save.get("player_name")
+    if not _saved_name:
+        _persona = (steam.persona_name() or "")
+        _saved_name = "".join(c for c in _persona if c.isalnum())[:8].upper() or "PLAYER"
+    sess.settings.player_name = _saved_name
     sess.settings.sound_on    = _save.get("sound_on", True)
     sess.settings.music_on    = _save.get("music_on", True)
     sess.best_solo            = _save.get("best_solo", None)
@@ -402,6 +408,7 @@ def main_v2():
         clock.tick(FPS)
         tick += 1
         cursor_tick += 1
+        steam.run_callbacks()
         op = online_phase_ref[0]
 
         for event in pygame.event.get():
@@ -898,6 +905,7 @@ def main_v2():
         "time_played": time_played_total + (time.perf_counter() - session_start),
     })
     net.close()
+    steam.shutdown()
     pygame.quit()
     sys.exit()
 
