@@ -5,7 +5,7 @@ Read by the UI (title-screen version label) and by build tooling
 Bump VERSION here before cutting a release.
 """
 APP_NAME = "shooter"
-VERSION  = "1.0.2"
+VERSION  = "1.0.3"
 
 # Public relay server, used by both the packaged client (client.py) and the
 # game's own fallback (main.py) when SERVER_URL isn't set via env/.env —

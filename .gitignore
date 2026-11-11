@@ -20,3 +20,5 @@ steam_api64.dll
 steam_api.dll
 libsteam_api.so
 libsteam_api.dylib
+# SteamPipe staging (steam/upload.sh)
+steam/build/
